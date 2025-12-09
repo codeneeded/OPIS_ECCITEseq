@@ -429,7 +429,7 @@ DimPlot2(
   label.color = "black", pt.size = 1
 )
 
-ggsave('cd8nk_subcluster_res0.4.png',
+ggsave('OPIS_subcluster_res0.4.png',
        dpi = 300,
        bg='white')
 

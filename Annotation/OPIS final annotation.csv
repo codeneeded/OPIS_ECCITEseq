@@ -1,0 +1,27 @@
+Cluster ID,Confirmed annotation
+0,CD8+ TEMRA
+1,Classical CD14+ mono
+2,CD8+ TEM (terminal)
+3,B Naïve
+4,NK CD56dim
+5,CD4+ Naïve 1
+6,CD4+ TCM
+7,CD4+ Naïve 2
+8,CD4+ Memory (Treg)
+9,CD8+ Transitional memory
+10,CD8+ TEM (intermediate)
+11,CD8+ Early TEMRA
+12,Transitional B cells
+13,CD8+ Naïve 
+14,CD8+ Late EM
+15,Classical CD14+ Mono (IL1B high)
+16,NK CD56high CD16+
+17,CD16+ NCM
+18,CD8+ NK-T-like cytotoxic
+19,CD8+ early NK-T-like cytotoxic
+20,pDC
+21,B intermediate
+22,cDC2
+23,Debris/Non-cell cluster
+24,B Naïve 2
+25,Debris/Non-cell cluster 2

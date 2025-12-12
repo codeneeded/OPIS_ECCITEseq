@@ -157,3 +157,100 @@ dir.create(plot_dir_adt, recursive = TRUE, showWarnings = FALSE)
   padj_cut = 0.01,
   subtitle = "Differential Protein Expression (ADT)"
 )
+#############For Grant
+
+# ----------------------------
+# Paths
+# ----------------------------
+base_dir <- "/home/akshay-iyer/Documents/OPIS_ECCITEseq"
+dge_dir  <- file.path(base_dir, "Differential_Expression", "DGE", "OUD_Pos_vs_Neg")
+
+grant_dir <- file.path(
+  base_dir,
+  "Differential_Expression",
+  "Volcano_Plots",
+  "For_Grant"
+)
+dir.create(grant_dir, recursive = TRUE, showWarnings = FALSE)
+
+infile <- file.path(dge_dir, "Classical_CD14_mono_OUD_Pos_vs_Neg_RNA.csv")
+
+# ----------------------------
+# Genes to label (all up in OUD+)
+# ----------------------------
+highlight_genes <- c("ALDOA","PGK1","GAPDH","ACTG1","MT-ND5","GPX1","NDUFB9")
+
+# ----------------------------
+# Read DGE results
+# ----------------------------
+deg <- read.csv(infile, row.names = 1, check.names = FALSE, stringsAsFactors = FALSE)
+
+# FC col can vary by Seurat version
+fc_col <- if ("avg_log2FC" %in% names(deg)) "avg_log2FC" else
+  if ("avg_logFC" %in% names(deg)) "avg_logFC" else
+    if ("Av_Log2FC" %in% names(deg)) "Av_Log2FC" else
+      stop("No fold-change column found (expected avg_log2FC / avg_logFC / Av_Log2FC).")
+
+deg$Gene <- rownames(deg)
+
+# Keep finite rows
+deg <- deg %>%
+  filter(!is.na(.data[[fc_col]]), !is.na(p_val_adj)) %>%
+  filter(is.finite(.data[[fc_col]]), is.finite(p_val_adj))
+
+padj_cut <- 0.05
+
+# ----------------------------
+# Two-color scheme only:
+#   - significant vs not significant
+# ----------------------------
+keyvals <- ifelse(deg$p_val_adj < padj_cut, "#28E2E5", "gray30")
+keyvals[is.na(keyvals)] <- "gray30"
+names(keyvals)[keyvals == "#28E2E5"] <- paste0("adj(p) < ", padj_cut)
+names(keyvals)[keyvals == "gray30"]  <- "NS"
+
+# ----------------------------
+# Volcano plot
+#   - No FC cutoff
+#   - Label only the specified genes
+# ----------------------------
+vp <- EnhancedVolcano(
+  deg,
+  lab = deg$Gene,
+  x = fc_col,
+  y = "p_val_adj",
+  xlab = bquote(~Log[2]~ "fold change (OUD+ vs OUD-)"),
+  ylab = bquote(~-Log[10]~ "adj. p-value"),
+  pCutoff  = padj_cut,
+  FCcutoff = 0,                 # no fold-change cutoff
+  pointSize = 3.2,
+  labSize   = 4.0,
+  labCol    = "black",
+  labFace   = "bold",
+  colAlpha  = 4/5,
+  colCustom = keyvals,          # ONLY 2 colors used
+  selectLab = highlight_genes,  # label these only
+  drawConnectors = TRUE,
+  widthConnectors = 0.8,
+  colConnectors   = "black",
+  boxedLabels = TRUE,
+  legendPosition = "right",
+  legendLabSize  = 13,
+  legendIconSize = 4.0,
+  title    = "Classical CD14+ Monocytes: OUD+ vs OUD-",
+  subtitle = "Selected genes labeled (no logFC cutoff); significance by adj. p-value"
+)
+
+# Save PNG only
+out_png <- file.path(grant_dir, "Volcano_Classical_CD14_mono_OUD_Pos_vs_Neg_RNA.png")
+
+ggsave(
+  filename = out_png,
+  plot     = vp + guides(color = guide_legend(reverse = TRUE)),
+  dpi      = 600,
+  width    = 10.5,
+  height   = 7.5,
+  bg       = "white"
+)
+
+message("Saved: ", out_png)

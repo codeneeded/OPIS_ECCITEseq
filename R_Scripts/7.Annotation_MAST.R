@@ -136,13 +136,21 @@ ggsave(
   dpi = 300,
   bg = "white"
 )
-
-ClusterDistrPlot(
-  origin = OPIS_ALL$orig.ident,
-  cluster = OPIS_ALL$Manual_Annotation,
-  condition = OPIS_ALL$OUD_status,
-  stat.method='wilcox.test'
+OPIS_ALL$OUD_status <- factor(
+  OPIS_ALL$OUD_status,
+  levels = c("OUD+", "OUD-")
 )
+ClusterDistrPlot(
+  origin    = OPIS_ALL$orig.ident,
+  cluster   = OPIS_ALL$Manual_Annotation,
+  condition = OPIS_ALL$OUD_status,
+  stat.method = "wilcox.test",
+  cols = c(
+    "OUD+" = "#F54927",
+    "OUD-" = "#1180808B"
+  )
+)
+
 ggsave(
   filename = file.path(post_annot_dir, "OPIS_Annotated_Cluster_Distribution_by_OUD_and_Sample_BOXPLOT.png"),
   width = 13,
@@ -151,6 +159,22 @@ ggsave(
   bg = "white"
 )
 
+p <- ClusterDistrPlot(
+  origin = OPIS_ALL$orig.ident,
+  cluster = OPIS_ALL$Manual_Annotation,
+  condition = OPIS_ALL$OUD_status,
+  stat.method='wilcox.test',
+  plot=F
+)
+# Convert to data.frame (keeps rownames = cluster names)
+p_df <- as.data.frame(p)
+
+# Save to CSV
+write.csv(
+  p_df,
+  file = "/home/akshay-iyer/Documents/OPIS_ECCITEseq/Annotation/Post-Annotation/Cluster_Distributions_OUD.csv",
+  row.names = TRUE
+)
 # ======================================
 # 4) Helper: Cluster-wise DE function
 # ======================================

@@ -97,6 +97,7 @@ p_manual <- DimPlot2(
   group.by   = "Manual_Annotation",
   label      = TRUE,
   repel      = TRUE,
+  cols       ='default',
   box        = TRUE,
   label.size = 3
 ) + ggtitle("OPIS_ALL | Manual Annotation")
@@ -108,6 +109,46 @@ ggsave(
   height   = 7,
   dpi      = 400,
   bg='white'
+)
+
+ClusterDistrBar(OPIS_ALL$OUD_status, OPIS_ALL$Manual_Annotation, cols = "default", flip = T) +
+  theme(axis.title.x = element_blank())
+
+ggsave(
+  filename = file.path(post_annot_dir, "OPIS_Annotated_Cluster_Distribution_by_OUD.png"),
+  width = 13,
+  height = 9,
+  dpi = 300,
+  bg = "white"
+)
+
+### Classical CD14+ mono (OUD+ vs neg, dots as samples (sample level, try stat test)), Classical CD14+ Mono (IL1B high)
+
+ClusterDistrPlot(
+  origin = OPIS_ALL$orig.ident,
+  cluster = OPIS_ALL$Manual_Annotation,
+  cols       ='default',
+)
+ggsave(
+  filename = file.path(post_annot_dir, "OPIS_Annotated_Cluster_Distribution_by_Sample.png"),
+  width = 13,
+  height = 9,
+  dpi = 300,
+  bg = "white"
+)
+
+ClusterDistrPlot(
+  origin = OPIS_ALL$orig.ident,
+  cluster = OPIS_ALL$Manual_Annotation,
+  condition = OPIS_ALL$OUD_status,
+  stat.method='wilcox.test'
+)
+ggsave(
+  filename = file.path(post_annot_dir, "OPIS_Annotated_Cluster_Distribution_by_OUD_and_Sample_BOXPLOT.png"),
+  width = 13,
+  height = 9,
+  dpi = 300,
+  bg = "white"
 )
 
 # ======================================

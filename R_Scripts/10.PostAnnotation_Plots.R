@@ -32,21 +32,13 @@ load.path <- "/home/akshay-iyer/Documents/OPIS_ECCITEseq/saved_R_data/"
 
 
 ### 
-OPIS_ALL <- qs_read(file.path(load.path, "OPIS_ALL_WNN.qs2"))
+OPIS_ALL <- qs_read(file.path(load.path, "OPIS_ALL_PostAnnotation.qs2"))
 
 
-######## Rejoin layers ####
-OPIS_ALL[["RNA"]] <- JoinLayers(OPIS_ALL[["RNA"]])
-OPIS_ALL[["ADT"]] <- JoinLayers(OPIS_ALL[["ADT"]])
-
-
-
-#################################### RNA and Protein Features of interest ##############################################library(dplyr)
-
-
+###################### Features ######################
 rna.features <- c(
   'ASCL2','BATF','BATF3','BCL6','BACH2','C1QBP','CCL2','CCL3','CCL4L2','CCL5','CCND3','CD14','CD19','CD1C',
-  'CD200','CD27','CD3D','CD3E','CD36','CD4','CD40','CD40LG','CD70','CD7','CD79A','CD8A','CD8B',
+  'CD200','CD27','CD3D','CD3E','CD36','CD4','CD40','CD40LG','CD70','CD7','CD79A','CD8A','CD8B', "CCR5",
   'CLEC9A','CR2','CTLA4','CTSW','CXCL8','CXCR3','CXCR5','EBI3','ENTPD1','FABP5','FCGR2B','FCGR3A',
   'FCRL5','FOXP3','GNLY','GP1BA','GP9','GATA3','GZMK','HAVCR2','HIF1A','HIST1H4C','HLA-DPA1',
   'HLA-DRA','HLA-DRB1','ICOS','IFI30','IFNG','IGFBP2','IGFBP4','IGHA1','IGHA2','IGHG1','IGHG2','IGHG3','IGHG4','IGHM','IKZF2','IL10',
@@ -59,88 +51,6 @@ rna.features <- c(
 )
 
 prots <- rownames(OPIS_ALL@assays$ADT)
-
-Idents(OPIS_ALL) <- 'wsnn_res.0.4'
-
-#Remove clusters with <50 cells
-# Identify clusters with fewer than 20 cells
-cluster_sizes <- table(Idents(OPIS_ALL))
-small_clusters <- names(cluster_sizes[cluster_sizes < 100])
-large_clusters <- names(cluster_sizes[cluster_sizes > 20])
-OPIS_ALL <- subset(OPIS_ALL, idents = large_clusters)
-
-############# Plots ###############################
-setwd('/home/akshay-iyer/Documents/OPIS_ECCITEseq/Annotation/Pre-Annotation/Cluster_Plots')
-p1 <- DimPlot2(
-  OPIS_ALL,
-  reduction = "wnn.umap",
-  group.by = "wsnn_res.0.4",
-  label=T,
-  repel = T,
-  box=T,
-  label.size = 5
-) + ggtitle("wsnn_res.0.4")
-
-ggsave(
-  filename = "OPIS_WNN_wsnn_res.0.4.png",
-  plot=p1,
-  width = 10,  # Adjust width as needed
-  height = 8,  # Adjust height as needed
-  dpi = 300,
-  bg='white'
-)
-p2 <- DimPlot2(
-  OPIS_ALL,
-  reduction = "wnn.umap",
-  group.by = "predicted.celltype.l2",
-  label = TRUE,
-  repel = TRUE,
-  box=T,
-  label.size = 5
-) + ggtitle("Azimuth 2")
-
-
-combined_wnn <- wrap_plots(p1, p2, ncol = 2, nrow = 1)
-
-ggsave(
-  filename = "OPIS_ALL_WNN_Clusters_Azimuth_0.4.png",
-  plot     = combined_wnn,
-  width    = 19,
-  height   = 9,
-  dpi      = 300,
-  bg='white'
-)
-
-
-p3 <- ClusterDistrBar(OPIS_ALL$orig.ident, OPIS_ALL$wsnn_res.0.4, cols = "default", flip = FALSE, border = "black") +
-  theme(axis.title.x = element_blank())
-
-
-ggsave(
-  filename = "OPIS_Cluster_Distribution_by_sample.png",
-  plot = p3,
-  width = 19,
-  height = 11,
-  dpi = 300,
-  bg = "white"
-)
-OPIS_ALL$OUD_status
-p4 <- ClusterDistrBar(OPIS_ALL$OUD_status, OPIS_ALL$wsnn_res.0.4, cols = "default", flip = FALSE, border = "black") +
-  theme(axis.title.x = element_blank())
-
-p4
-ggsave(
-  filename = "OPIS_Cluster_Distribution_by_OUD.png",
-  plot = p4,
-  width = 13,
-  height = 9,
-  dpi = 300,
-  bg = "white"
-)
-qs_save(
-  OPIS_ALL,
-  file = file.path(load.path, "OPIS_ALL_PreAnnotation.qs2")
-)
 ########################################## Feature Plots and VLN Plots ###############################################
 
 
@@ -151,7 +61,7 @@ rna.features <- intersect(rna.features, rownames(OPIS_ALL[["RNA"]]))
 #        Base directory + subfolders        #
 # ----------------------------------------- #
 
-base_dir <- "/home/akshay-iyer/Documents/OPIS_ECCITEseq/Annotation/Pre-Annotation"
+base_dir <- "/home/akshay-iyer/Documents/OPIS_ECCITEseq/Annotation/Post-Annotation"
 
 # ADT subfolders
 adt_vln_dir          <- file.path(base_dir, "Violin_Plot", "ADT")
@@ -313,5 +223,4 @@ for (i in rna.features) {
     )
   }
 }
-
 

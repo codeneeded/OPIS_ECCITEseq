@@ -787,7 +787,7 @@ for (mod_name in names(modules)) {
 
 # Save coverage + scored object (optional but recommended)
 write.csv(coverage, file.path(out_modules, "ModuleScore_Coverage.csv"), row.names = FALSE)
-qs2::qs_save(OPIS_ALL, file.path(out_modules, "OPIS_ALL_PostAnnotation_withModules.qs2"))
+qs2::qs_save(OPIS_ALL, file.path(out_modules, "OPIS_ALL_PostAnnotation_IFNModules.qs2"))
 
 
 # ---------------------------- #

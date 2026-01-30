@@ -467,7 +467,48 @@ for (sh in pw_sheets) {
     plot_title = paste0(cluster_name, " | Curated pathways")
   )
 }
+# ============================================================
+# One-off replot for NK_CD56dim (exclude 2 pathways)
+# ============================================================
 
+cluster_name   <- "NK CD56dim"
+cluster_prefix <- "NK_CD56dim"
+
+# Pathways to remove (exact, case-insensitive)
+exclude_terms <- c(
+  "Natural Killer cell-mediated cytotoxicity",
+  "Human immunodeficiency virus 1 infection"
+)
+
+# Read curated pathways for NK
+curated_pw <- .read_curated_term_db(
+  curated_xlsx,
+  sheet = "NK CD56dim curated pathways"
+)
+
+# Drop excluded pathways
+curated_pw <- curated_pw %>%
+  mutate(term_norm = str_to_lower(str_trim(term))) %>%
+  filter(!term_norm %in% str_to_lower(str_trim(exclude_terms))) %>%
+  select(-term_norm)
+
+# EnrichR Excel (already exists)
+enrich_xlsx <- "/home/akshay-iyer/Documents/OPIS_ECCITEseq/Pathway_Analysis_EnrichR/RNA_OUD_Pos_vs_Neg/CSVs/NK_CD56dim_OUD_Pos_vs_Neg_RNA_Enrichment.xlsx"
+
+# Output (overwrite or new file name if you want)
+out_png <- file.path(
+  out_pathways,
+  "CuratedPathways_NK_CD56dim.png"
+)
+
+# Plot
+.plot_curated_enrich_terms(
+  curated_df   = curated_pw,
+  xlsx_path    = enrich_xlsx,
+  cluster_name = cluster_name,
+  out_png      = out_png,
+  plot_title   = "NK CD56dim | Curated pathways"
+)
 # ---------------------------- #
 # 4) Curated TF plots (DETERMINISTIC EnrichR Excel)
 # ---------------------------- #

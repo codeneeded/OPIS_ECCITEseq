@@ -273,7 +273,7 @@ for (sh in dge_sheets) {
     pCutoff  = 0.01,
     FCcutoff = 0.25,                # keep permissive since curated may include modest FC
     pointSize = 2.2,
-    labSize   = 3.4,
+    labSize   = 4.5,
     labCol    = "black",
     labFace   = "bold",
     colAlpha  = 0.85,
@@ -430,10 +430,13 @@ stopifnot(dir.exists(enrich_dir))
     ) +
     theme_classic(base_size = 12) +
     theme(
+      axis.text.y = element_text(size = 13),   # <- THIS controls Term labels
+      axis.text.x = element_text(size = 11),   # <- numeric axis (Value)
       legend.position = "right",
       legend.title = element_text(size = 11, face = "bold"),
       legend.text  = element_text(size = 10)
     )
+  
   
   ggsave(
     out_png,
@@ -477,7 +480,9 @@ cluster_prefix <- "NK_CD56dim"
 # Pathways to remove (exact, case-insensitive)
 exclude_terms <- c(
   "Natural Killer cell-mediated cytotoxicity",
-  "Human immunodeficiency virus 1 infection"
+  "Human immunodeficiency virus 1 infection",
+  "Immune system signaling by interferons, interleukins, prolactin, and growth hormones",
+  "Interactions Of Natural Killer Cells In Pancreatic Cancer WP5092"
 )
 
 # Read curated pathways for NK
@@ -834,7 +839,7 @@ qs2::qs_save(OPIS_ALL, file.path(out_modules, "OPIS_ALL_PostAnnotation_IFNModule
 # ---------------------------- #
 # B) PLOTTING ONLY
 # ---------------------------- #
-cluster_col = "Manual_Annotation"
+clustercells.high_col = "Manual_Annotation"
 has_oud <- group_col %in% colnames(OPIS_ALL@meta.data)
 
 for (mod_name in names(modules)) {
@@ -886,3 +891,21 @@ for (mod_name in names(modules)) {
     )
   }
 }  
+
+##########3
+
+
+Cluster_Highlight_Plot(seurat_object = OPIS_ALL, 
+                       reduction  = "wnn.umap",
+                       cluster_name = c("CD8+ TEMRA", "NK CD56dim"), 
+                       highlight_color = c("#E0B0FF", '#9FE2BF'),
+                       background_color = 'black',
+                       alpha=4
+                       )
+ggsave(
+  filename = file.path(out_base, "temra_dim_labled_umap.png"),
+  width    = 8,
+  height   = 7,
+  dpi      = 400,
+  bg='white'
+)

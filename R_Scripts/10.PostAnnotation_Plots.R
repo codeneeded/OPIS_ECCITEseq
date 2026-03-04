@@ -34,7 +34,7 @@ load.path <- "/home/akshay-iyer/Documents/OPIS_ECCITEseq/saved_R_data/"
 ### 
 OPIS_ALL <- qs_read(file.path(load.path, "OPIS_ALL_PostAnnotation.qs2"))
 
-
+levels(as.factor(OPIS_ALL$Cluster_ID))
 ###################### Features ######################
 rna.features <- c(
   'ASCL2','BATF','BATF3','BCL6','BACH2','C1QBP','CCL2','CCL3','CCL4L2','CCL5','CCND3','CD14','CD19','CD1C',

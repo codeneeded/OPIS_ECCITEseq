@@ -35,6 +35,7 @@ load.path <- "/home/akshay-iyer/Documents/OPIS_ECCITEseq/saved_R_data/"
 OPIS_ALL <- qs_read(file.path(load.path, "OPIS_ALL_PostAnnotation.qs2"))
 
 levels(as.factor(OPIS_ALL$Cluster_ID))
+
 ###################### Features ######################
 rna.features <- c(
   'ASCL2','BATF','BATF3','BCL6','BACH2','C1QBP','CCL2','CCL3','CCL4L2','CCL5','CCND3','CD14','CD19','CD1C',
@@ -49,7 +50,19 @@ rna.features <- c(
   'TNFRSF4','TNFRSF9','TOX','TBX21','TRBC1','TRDC','TRDV1','TRDV2','TRGC1','TRGC2','TRGV9','XBP1',
   'XCL1','XCL2','ZBTB16','ZEB2'
 )
-
+rna.features.2 <- c(
+  'TRAC','TRBC2','IL7R',
+  'FOS','FOSB','JUN','JUNB','JUND','EGR1','EGR2','EGR3','NR4A2','NR4A3',
+  'DUSP1','DUSP2','DUSP4','DUSP5','IER2','IER3','TNFAIP3',
+  'HSP90AA1','HSPA1A','HSPA1B',
+  'TNFRSF4','TNFRSF9','TNFRSF18',
+  'CCR7','LEF1','KLF2','KLF3',
+  'CCL4','CXCR4','ITGA4','ITGB1','IL12RB2','CCR6','IL23R','TOX2','IL21',
+  'GZMB','CTSW','FGFBP2',
+  'TOP2A','HMGB2','TYMS','PCNA','STMN1',
+  'TUBB','UBE2C','CENPF',
+  'S100A4'
+)
 prots <- rownames(OPIS_ALL@assays$ADT)
 ########################################## Feature Plots and VLN Plots ###############################################
 
@@ -224,3 +237,69 @@ for (i in rna.features) {
   }
 }
 
+for (i in rna.features.2) {
+  if (i %in% rownames(OPIS_ALL[["RNA"]])) {
+    
+    # ------------------------------- #
+    #   1) SPLIT-BY OUD STATUS FIRST  #
+    # ------------------------------- #
+    vln.pl.split <- VlnPlot2(
+      OPIS_ALL,
+      features   = i,
+      cols       = "default",
+      split.by   = "OUD_status",
+      stat.method = "wilcox.test",
+      show.mean  = TRUE,
+      mean_colors = c("red", "blue")
+    ) + ggtitle(paste("RNA |", i, "| Split by OUD_status"))
+    
+    ggsave(
+      filename = file.path(rna_vln_OUD_dir, paste0(i, "_RNA_VLNplot_splitBy_OUD_status.png")),
+      plot     = vln.pl.split,
+      dpi      = 500,
+      width    = 14,
+      height   = 8,
+      bg       = "white"
+    )
+    
+    # ------------------------------- #
+    #   2) NON-SPLIT VIOLIN PLOT      #
+    # ------------------------------- #
+    vln.pl <- VlnPlot2(
+      OPIS_ALL,
+      features   = i,
+      cols       = "default",
+      show.mean  = TRUE,
+      mean_colors = c("red", "blue")
+    ) + ggtitle(paste("RNA |", i))
+    
+    ggsave(
+      filename = file.path(rna_vln_dir, paste0(i, "_RNA_VLNplot.png")),
+      plot     = vln.pl,
+      dpi      = 500,
+      width    = 14,
+      height   = 8,
+      bg       = "white"
+    )
+    
+    # ------------------------------- #
+    #   3) FEATURE PLOT               #
+    # ------------------------------- #
+    pal <- viridis(n = 10, option = "A")
+    
+    fea.pl <- FeaturePlot_scCustom(
+      OPIS_ALL,
+      reduction  = "wnn.umap",
+      features   = i,
+      colors_use = pal,
+      order      = TRUE
+    )
+    
+    ggsave(
+      filename = file.path(rna_feature_dir, paste0(i, "_RNA_Featureplot_Magma.png")),
+      plot     = fea.pl,
+      dpi      = 500,
+      width    = 8
+    )
+  }
+}

@@ -66,7 +66,19 @@ rna.features <- c(
   'TNFRSF4','TNFRSF9','TOX','TBX21','TRBC1','TRDC','TRDV1','TRDV2','TRGC1','TRGC2','TRGV9','XBP1',
   'XCL1','XCL2','ZBTB16','ZEB2'
 )
-
+rna.features.2 <- c(
+  'TRAC','TRBC2','IL7R',
+  'FOS','FOSB','JUN','JUNB','JUND','EGR1','EGR2','EGR3','NR4A2','NR4A3',
+  'DUSP1','DUSP2','DUSP4','DUSP5','IER2','IER3','TNFAIP3',
+  'HSP90AA1','HSPA1A','HSPA1B',
+  'TNFRSF4','TNFRSF9','TNFRSF18',
+  'CCR7','LEF1','KLF2','KLF3',
+  'CCL4','CXCR4','ITGA4','ITGB1','IL12RB2','CCR6','IL23R','TOX2','IL21',
+  'GZMB','CTSW','FGFBP2',
+  'TOP2A','HMGB2','TYMS','PCNA','STMN1',
+  'TUBB','UBE2C','CENPF',
+  'S100A4'
+)
 prots <- rownames(OPIS_ALL@assays$ADT)
 
 # =============================================================================
@@ -356,4 +368,201 @@ ggsave(file.path(nkcd8.umap.dir, "NKCD8_OriginalClusterIDs_UMAP.png"),
        plot = p4, dpi = 500, width = 10, height = 8, bg = "white")
 
 message("DimPlot2 UMAPs saved.")
+#########################
+############################################################
+# Load pre-annotation objects with qs and make RNA_Extra plots
+############################################################
 
+
+# ---------------------------- #
+# 1) Load objects
+# ---------------------------- #
+opis_save_dir <- "/home/akshay-iyer/Documents/OPIS_ECCITEseq/saved_R_data"
+
+OPIS_NKCD8 <- qs_read(file.path(opis_save_dir, "OPIS_NKCD8_PreAnnotation.qs2"))
+OPIS_CD4   <- qs_read(file.path(opis_save_dir, "OPIS_CD4_PreAnnotation.qs2"))
+
+# ---------------------------- #
+# 2) Extra RNA feature lists
+# ---------------------------- #
+rna.features <- c(
+  'TRAC','TRBC2','IL7R',
+  'FOS','FOSB','JUN','JUNB','JUND','EGR1','EGR2','EGR3','NR4A2','NR4A3',
+  'DUSP1','DUSP2','DUSP4','DUSP5','IER2','IER3','TNFAIP3',
+  'HSP90AA1','HSPA1A','HSPA1B',
+  'TNFRSF4','TNFRSF9','TNFRSF18',
+  'CCR7','LEF1','KLF2','KLF3',
+  'CCL4','CXCR4','ITGA4','ITGB1','IL12RB2','CCR6','IL23R','TOX2','IL21',
+  'GZMB','CTSW','FGFBP2',
+  'TOP2A','HMGB2','TYMS','PCNA','STMN1',
+  'TUBB','UBE2C','CENPF',
+  'S100A4'
+)
+
+# optional split if you still want two loops / two panels
+rna.features.2 <- character(0)
+
+# ---------------------------- #
+# 3) Output folders
+# ---------------------------- #
+cd4_plot_base <- "/home/akshay-iyer/Documents/OPIS_ECCITEseq/subclustering/pre_annotation/CD4/plots"
+nkcd8_plot_base <- "/home/akshay-iyer/Documents/OPIS_ECCITEseq/subclustering/pre_annotation/NK_CD8/plots"
+
+cd4_rna_extra_dir <- file.path(cd4_plot_base, "RNA_Extra")
+nkcd8_rna_extra_dir <- file.path(nkcd8_plot_base, "RNA_Extra")
+
+dir.create(cd4_rna_extra_dir, recursive = TRUE, showWarnings = FALSE)
+dir.create(nkcd8_rna_extra_dir, recursive = TRUE, showWarnings = FALSE)
+
+# CD4 subfolders
+cd4_rna_vln_dir      <- file.path(cd4_rna_extra_dir, "Violin")
+cd4_rna_vln_OUD_dir  <- file.path(cd4_rna_extra_dir, "Violin_split_by_OUD_status")
+cd4_rna_feature_dir  <- file.path(cd4_rna_extra_dir, "FeaturePlot")
+
+dir.create(cd4_rna_vln_dir, recursive = TRUE, showWarnings = FALSE)
+dir.create(cd4_rna_vln_OUD_dir, recursive = TRUE, showWarnings = FALSE)
+dir.create(cd4_rna_feature_dir, recursive = TRUE, showWarnings = FALSE)
+
+# NK_CD8 subfolders
+nkcd8_rna_vln_dir      <- file.path(nkcd8_rna_extra_dir, "Violin")
+nkcd8_rna_vln_OUD_dir  <- file.path(nkcd8_rna_extra_dir, "Violin_split_by_OUD_status")
+nkcd8_rna_feature_dir  <- file.path(nkcd8_rna_extra_dir, "FeaturePlot")
+
+dir.create(nkcd8_rna_vln_dir, recursive = TRUE, showWarnings = FALSE)
+dir.create(nkcd8_rna_vln_OUD_dir, recursive = TRUE, showWarnings = FALSE)
+dir.create(nkcd8_rna_feature_dir, recursive = TRUE, showWarnings = FALSE)
+
+# ---------------------------- #
+# 4) Plotting function
+# ---------------------------- #
+make_rna_extra_plots <- function(
+    seu,
+    feature_vec,
+    out_vln_dir,
+    out_vln_oud_dir,
+    out_feature_dir,
+    obj_name = "SeuratObject"
+) {
+  
+  DefaultAssay(seu) <- "RNA"
+  pal <- viridis(n = 10, option = "A")
+  
+  for (i in feature_vec) {
+    if (i %in% rownames(seu[["RNA"]])) {
+      
+      message("[", obj_name, "] Plotting: ", i)
+      
+      # ------------------------------- #
+      # 1) SPLIT-BY OUD STATUS VIOLIN   #
+      # ------------------------------- #
+      vln.pl.split <- VlnPlot2(
+        seu,
+        features    = i,
+        cols        = "default",
+        split.by    = "OUD_status",
+        stat.method = "wilcox.test",
+        show.mean   = TRUE,
+        mean_colors = c("red", "blue")
+      ) + ggtitle(paste("RNA |", i, "| Split by OUD_status"))
+      
+      ggsave(
+        filename = file.path(out_vln_oud_dir, paste0(i, "_RNA_VLNplot_splitBy_OUD_status.png")),
+        plot     = vln.pl.split,
+        dpi      = 500,
+        width    = 14,
+        height   = 8,
+        bg       = "white"
+      )
+      
+      # ------------------------------- #
+      # 2) NON-SPLIT VIOLIN PLOT        #
+      # ------------------------------- #
+      vln.pl <- VlnPlot2(
+        seu,
+        features    = i,
+        cols        = "default",
+        show.mean   = TRUE,
+        mean_colors = c("red", "blue")
+      ) + ggtitle(paste("RNA |", i))
+      
+      ggsave(
+        filename = file.path(out_vln_dir, paste0(i, "_RNA_VLNplot.png")),
+        plot     = vln.pl,
+        dpi      = 500,
+        width    = 14,
+        height   = 8,
+        bg       = "white"
+      )
+      
+      # ------------------------------- #
+      # 3) FEATURE PLOT                 #
+      # ------------------------------- #
+      fea.pl <- FeaturePlot_scCustom(
+        seu,
+        reduction  = "wnn.umap",
+        features   = i,
+        colors_use = pal,
+        order      = TRUE
+      )
+      
+      ggsave(
+        filename = file.path(out_feature_dir, paste0(i, "_RNA_Featureplot_Magma.png")),
+        plot     = fea.pl,
+        dpi      = 500,
+        width    = 8,
+        height   = 7,
+        bg       = "white"
+      )
+    } else {
+      message("[", obj_name, "] Skipping missing gene: ", i)
+    }
+  }
+}
+
+# ---------------------------- #
+# 5) Run for CD4
+# ---------------------------- #
+make_rna_extra_plots(
+  seu             = OPIS_CD4,
+  feature_vec     = rna.features,
+  out_vln_dir     = cd4_rna_vln_dir,
+  out_vln_oud_dir = cd4_rna_vln_OUD_dir,
+  out_feature_dir = cd4_rna_feature_dir,
+  obj_name        = "OPIS_CD4"
+)
+
+if (length(rna.features.2) > 0) {
+  make_rna_extra_plots(
+    seu             = OPIS_CD4,
+    feature_vec     = rna.features.2,
+    out_vln_dir     = cd4_rna_vln_dir,
+    out_vln_oud_dir = cd4_rna_vln_OUD_dir,
+    out_feature_dir = cd4_rna_feature_dir,
+    obj_name        = "OPIS_CD4"
+  )
+}
+
+# ---------------------------- #
+# 6) Run for NK_CD8
+# ---------------------------- #
+make_rna_extra_plots(
+  seu             = OPIS_NKCD8,
+  feature_vec     = rna.features,
+  out_vln_dir     = nkcd8_rna_vln_dir,
+  out_vln_oud_dir = nkcd8_rna_vln_OUD_dir,
+  out_feature_dir = nkcd8_rna_feature_dir,
+  obj_name        = "OPIS_NKCD8"
+)
+
+if (length(rna.features.2) > 0) {
+  make_rna_extra_plots(
+    seu             = OPIS_NKCD8,
+    feature_vec     = rna.features.2,
+    out_vln_dir     = nkcd8_rna_vln_dir,
+    out_vln_oud_dir = nkcd8_rna_vln_OUD_dir,
+    out_feature_dir = nkcd8_rna_feature_dir,
+    obj_name        = "OPIS_NKCD8"
+  )
+}
+
+message("Done.")

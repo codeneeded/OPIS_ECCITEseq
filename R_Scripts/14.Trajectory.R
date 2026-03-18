@@ -92,21 +92,21 @@ print(table(OPIS_NKCD8$celltype_annotation))
 # Clusters 9 and 10 are flagged for removal
 
 cd4_annotation_map <- c(
-  "0"  = "Naïve",
-  "1"  = "T cm",
-  "2"  = "T cm",
-  "3"  = "Naïve",
-  "4"  = "Treg",
-  "5"  = "T cm",
-  "6"  = "Activated Naïve",
-  "7"  = "Effector memory",
-  "8"  = "T cm",
+  "0"  = "CD4+ Naïve",
+  "1"  = "CD4+ Tcm",
+  "2"  = "CD4+ Tcm",
+  "3"  = "CD4+ Naïve",
+  "4"  = "CD4+ Treg",
+  "5"  = "CD4+ Tcm",
+  "6"  = "Activated CD4+ Naïve",
+  "7"  = "CD4+ KLRG1+ Tem",
+  "8"  = "CD4+ Tcm",
   "9"  = "Remove",
   "10" = "Remove",
-  "11" = "CD4 CD45RA+ 1",
-  "12" = "CD4 CD45RA+ 2",
-  "13" = "Activated memory",
-  "14" = "CD4 Tscm"
+  "11" = "CD4+ term memory",
+  "12" = "Remove",
+  "13" = "Activated CD4+ memory",
+  "14" = "CD4+ Tscm-like "
 )
 
 # Apply annotations
@@ -266,7 +266,7 @@ cds_cd4 <- learn_graph(cds_cd4, use_partition = TRUE)
 # ---- Root at Naïve -----------------------------------------------------------
 root_cells_cd4 <- rownames(subset(
   colData(cds_cd4),
-  celltype_annotation == "Naïve"
+  celltype_annotation == "CD4+ Naïve"
 ))
 cds_cd4 <- order_cells(cds_cd4, root_cells = root_cells_cd4)
 

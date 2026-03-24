@@ -97,6 +97,7 @@ p2 <- DimPlot2(
   theme       = list(NoLegend(), NoAxes(), theme_umap_arrows())
 ) + ggtitle("Broad Cell Type Annotation")
 
+
 # Save combined
 png(file.path(out_umap, "PBMC_UMAP_Clusters_and_CellTypes.png"),
     width = 20, height = 8, units = "in", res = 300, bg = "white")
@@ -111,6 +112,27 @@ ggsave(file.path(out_umap, "PBMC_UMAP_BroadCellTypes.png"),
 
 message("✓ Section 1: PBMC UMAP saved")
 
+ClusterDistrBar(origin = OPIS_ALL$OUD_status, cluster = OPIS_ALL$broad_celltype, flip = FALSE, reverse_order = FALSE)
+ggsave(
+  filename = file.path(out_umap, "PBMC_Cluster_Prop_Stacked_Bar.png"),
+  width    = 6,
+  height   = 5,
+  bg='white'
+)
+
+
+ClusterDistrPlot(
+  origin = OPIS_ALL$orig.ident,
+  cluster = OPIS_ALL$broad_celltype,
+  condition = OPIS_ALL$OUD_status,
+  cols=c('#1180808B','#F54927')
+)
+ggsave(
+  filename = file.path(out_umap, "PBMC_Clust_Prop_wilcoxins.png"),
+  width    = 10,
+  height   = 6,
+  bg='white'
+)
 ################################################################################
 # 2) Load CD4 & NK/CD8 annotated objects + DimPlots
 ################################################################################
@@ -131,7 +153,8 @@ p_cd4_umap <- DimPlot2(
   label       = TRUE,
   repel       = TRUE,
   box         = TRUE,
-  label.size  = 8,
+  pt.size = 1.5,
+  label.size  = 7,
   theme       = list(NoLegend(), NoAxes(), theme_umap_arrows())
 ) + ggtitle("CD4+ T Cell Subtypes")
 
@@ -146,7 +169,8 @@ p_nkcd8_umap <- DimPlot2(
   label       = TRUE,
   repel       = TRUE,
   box         = TRUE,
-  label.size  = 8,
+  pt.size = 1.5,
+  label.size  = 7,
   theme       = list(NoLegend(), NoAxes(), theme_umap_arrows())
 ) + ggtitle("NK & CD8+ T Cell Subtypes")
 

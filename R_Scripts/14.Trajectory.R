@@ -54,8 +54,8 @@ nkcd8_annotation_map <- c(
   "3"  = "CD8+ Tem",
   "4"  = "CD8+ Tem",
   "5"  = "CD8+ TEMRA",
-  "6"  = "CD56+ NK",
-  "7"  = "CD56dim NK",
+  "6"  = "CD56dim NK",
+  "7"  = "CD56dim NK", #<- split into NCAM1 (ADT>10 & FCGR3A < 8) -> moved into clster CD56bright
   "8"  = "CD8+ Memory",
   "9"  = "CD56- NK",
   "10" = "CD56dim NK",
@@ -75,6 +75,9 @@ nkcd8_annotation_map <- c(
   "24" = "CD8+ Tem"
 )
 
+########## 
+
+
 # Apply annotations
 # Assumes the active Ident or a metadata column named 'seurat_clusters' holds cluster IDs
 OPIS_NKCD8$celltype_annotation <- unname(nkcd8_annotation_map[
@@ -85,6 +88,31 @@ Idents(OPIS_NKCD8) <- "celltype_annotation"
 
 message("NK/CD8 annotation summary:")
 print(table(OPIS_NKCD8$celltype_annotation))
+
+# --- Split cluster 7: CD56bright based on ADT expression ---
+# Identify cluster 7 cells meeting CD56bright criteria
+cluster7_cells <- WhichCells(OPIS_NKCD8, expression = Subcluster_ID == 7)
+
+# Get ADT expression for these cells
+# (ADT assay is typically stored as "ADT" or "CITE" — adjust if yours differs)
+ncam1_adt  <- FetchData(OPIS_NKCD8, vars = "adt_NCAM1", cells = cluster7_cells)
+fcgr3a_adt <- FetchData(OPIS_NKCD8, vars = "adt_FCGR3A", cells = cluster7_cells)
+
+# Cells that are CD56bright: NCAM1 (CD56) high, FCGR3A (CD16) low
+cd56bright_cells <- cluster7_cells[ncam1_adt[,1] > 10 & fcgr3a_adt[,1] < 8]
+
+message(sprintf("Cluster 7: %d total cells, %d reclassified as CD56bright NK",
+                length(cluster7_cells), length(cd56bright_cells)))
+
+# Reclassify those cells
+OPIS_NKCD8$celltype_annotation[cd56bright_cells] <- "CD56bright NK"
+
+Idents(OPIS_NKCD8) <- "celltype_annotation"
+message("Updated annotation summary:")
+print(table(OPIS_NKCD8$celltype_annotation))
+
+
+
 
 # =============================================================================
 # 3) Annotate CD4 Object
@@ -104,7 +132,7 @@ cd4_annotation_map <- c(
   "9"  = "Remove",
   "10" = "Remove",
   "11" = "CD4+ term memory",
-  "12" = "Remove",
+  "12" = "CD4+ Memory",
   "13" = "Activated CD4+ memory",
   "14" = "CD4+ Tscm-like "
 )
@@ -148,8 +176,11 @@ nkcd8_plot <- DimPlot2(
   group.by  = "celltype_annotation",
   box=T,
   cols = 'default',
-  pt.size = 1
-) + ggtitle("NK/CD8 – Annotated") + NoLegend()
+  label.size = 7,
+  pt.size = 1.5,
+  raster     = FALSE,
+  theme      = list(NoLegend(), NoAxes(), theme_umap_arrows())
+) + ggtitle("NK/CD8 – Annotated")
 
 cd4_plot <- DimPlot2(
   OPIS_CD4,
@@ -158,9 +189,11 @@ cd4_plot <- DimPlot2(
   repel     = TRUE,
   group.by  = "celltype_annotation",
   box=T,
+  label.size = 7,
   cols = 'default',
-  pt.size = 1
-) + ggtitle("CD4 – Annotated") + NoLegend()
+  pt.size = 1.5,
+  theme      = list(NoLegend(), NoAxes(), theme_umap_arrows())
+) + ggtitle("CD4 – Annotated") 
 cd4_plot
 combined_plot <- nkcd8_plot | cd4_plot
 
@@ -172,7 +205,50 @@ ggsave(
   bg='white'
 )
 
-################################# Trajectory Analysis ####################
+##################################
+ClusterDistrBar(origin = OPIS_NKCD8$OUD_status, cluster = OPIS_NKCD8$celltype_annotation, flip = FALSE, reverse_order = FALSE)
+ggsave(
+  filename = file.path(subclust.root, "CD8_NK_Clust_Prop_Stacked_Bar.png"),
+  width    = 6,
+  height   = 5,
+  bg='white'
+)
+
+
+ClusterDistrPlot(
+  origin = OPIS_NKCD8$orig.ident,
+  cluster = OPIS_NKCD8$celltype_annotation,
+  condition = OPIS_NKCD8$OUD_status,
+  cols=c('#1180808B','#F54927')
+)
+ggsave(
+  filename = file.path(subclust.root, "CD8_NK_Clust_Prop_wilcoxins.png"),
+  width    = 10,
+  height   = 6,
+  bg='white'
+)
+ClusterDistrBar(origin = OPIS_CD4$OUD_status, cluster = OPIS_CD4$celltype_annotation, cols='default',flip = FALSE, reverse_order = FALSE)
+ggsave(
+  filename = file.path(subclust.root, "CD4_Clust_Prop_Stacked_Bar.png"),
+  width    = 6,
+  height   = 5,
+  bg='white'
+)
+
+
+ClusterDistrPlot(
+  origin = OPIS_CD4$orig.ident,
+  cluster = OPIS_CD4$celltype_annotation,
+  condition = OPIS_CD4$OUD_status,
+  cols=c('#1180808B','#F54927')
+)
+ggsave(
+  filename = file.path(subclust.root, "CD4_Clust_Prop_wilcoxins.png"),
+  width    = 10,
+  height   = 6,
+  bg='white'
+)
+################################ Trajectory Analysis ####################
 # =============================================================================
 # OPIS ECCITEseq - Trajectory Analysis (Monocle3)
 # CD4 & CD8 (NK clusters excluded)

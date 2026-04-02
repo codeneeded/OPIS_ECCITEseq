@@ -416,6 +416,11 @@ ggsave(file.path(traj.out, "CD4_Pseudotime_SeuratUMAP.png"), p_cd4_feat, width =
 
 message("Pseudotime transferred back to Seurat objects and plotted.")
 
+# ---- Save objects with pseudotime so we don't have to re-run trajectory ------
+qs_save(OPIS_CD8, file.path(load.path, "OPIS_CD8_WithPseudotime.qs2"))
+qs_save(OPIS_CD4, file.path(load.path, "OPIS_CD4_WithPseudotime.qs2"))
+message("Objects with pseudotime saved to: ", load.path)
+
 # =============================================================================
 # 6) Genes That Change Along Pseudotime
 # =============================================================================
@@ -599,3 +604,349 @@ ggsave(
   plot     = p_cd4_curves_pt,
   width    = 15, height = 8, dpi = 300
 )
+
+# =============================================================================
+# 8) BACH2 & Naïve/Stemness Module Score Along Pseudotime by OUD Status
+# =============================================================================
+# If starting fresh (session closed), uncomment the block below to reload:
+# ---- RELOAD BLOCK (uncomment if needed) --------------------------------------
+# library(Seurat)
+# library(ggplot2)
+# library(cowplot)
+# library(viridis)
+# library(patchwork)
+# library(dplyr)
+# library(qs2)
+#
+# load.path     <- "/home/akshay-iyer/Documents/OPIS_ECCITEseq/saved_R_data"
+# OPIS_CD8 <- qs_read(file.path(load.path, "OPIS_CD8_WithPseudotime.qs2"))
+# OPIS_CD4 <- qs_read(file.path(load.path, "OPIS_CD4_WithPseudotime.qs2"))
+# message("Reloaded CD8 and CD4 objects with pseudotime.")
+# ---- END RELOAD BLOCK -------------------------------------------------------
+
+# ---- Output paths ------------------------------------------------------------
+manuscript.root <- "/home/akshay-iyer/Documents/OPIS_ECCITEseq/Manuscript_Figures/Trajectories"
+bach2.out       <- file.path(manuscript.root, "BACH2")
+module.out      <- file.path(manuscript.root, "Naive_Stemness_Module")
+
+dir.create(bach2.out,  recursive = TRUE, showWarnings = FALSE)
+dir.create(module.out, recursive = TRUE, showWarnings = FALSE)
+
+# =============================================================================
+# 8a) Define Module Gene List & Add Module Score
+# =============================================================================
+
+naive_stemness_genes <- list(
+  Naive_Stemness = c("BACH2", "TCF7", "LEF1", "SELL", "CCR7", "IL7R")
+)
+
+# Make sure default assay is RNA for AddModuleScore
+DefaultAssay(OPIS_CD8) <- "RNA"
+DefaultAssay(OPIS_CD4) <- "RNA"
+
+OPIS_CD8 <- AddModuleScore(
+  object   = OPIS_CD8,
+  features = naive_stemness_genes,
+  name     = "Naive_Stemness_Score"
+)
+
+OPIS_CD4 <- AddModuleScore(
+  object   = OPIS_CD4,
+  features = naive_stemness_genes,
+  name     = "Naive_Stemness_Score"
+)
+
+# AddModuleScore appends a "1" to the name
+message("Module score columns added: Naive_Stemness_Score1")
+
+# ---- Save objects with pseudotime + module scores ----------------------------
+qs_save(OPIS_CD8, file.path(load.path, "OPIS_CD8_WithPseudotime.qs2"))
+qs_save(OPIS_CD4, file.path(load.path, "OPIS_CD4_WithPseudotime.qs2"))
+message("Objects updated with module scores and saved to: ", load.path)
+
+# =============================================================================
+# 8b) Build Plotting Data Frames
+# =============================================================================
+
+# CD8
+cd8_plot_df <- data.frame(
+  pseudotime             = OPIS_CD8$pseudotime,
+  celltype_annotation    = OPIS_CD8$celltype_annotation,
+  OUD_status             = OPIS_CD8$OUD_status,
+  BACH2_expr             = FetchData(OPIS_CD8, vars = "BACH2")[, 1],
+  Naive_Stemness_Score   = OPIS_CD8$Naive_Stemness_Score1,
+  UMAP_1                 = Embeddings(OPIS_CD8, reduction = "wnn.umap")[, 1],
+  UMAP_2                 = Embeddings(OPIS_CD8, reduction = "wnn.umap")[, 2]
+)
+cd8_plot_df <- cd8_plot_df[is.finite(cd8_plot_df$pseudotime), ]
+
+# CD4
+cd4_plot_df <- data.frame(
+  pseudotime             = OPIS_CD4$pseudotime,
+  celltype_annotation    = OPIS_CD4$celltype_annotation,
+  OUD_status             = OPIS_CD4$OUD_status,
+  BACH2_expr             = FetchData(OPIS_CD4, vars = "BACH2")[, 1],
+  Naive_Stemness_Score   = OPIS_CD4$Naive_Stemness_Score1,
+  UMAP_1                 = Embeddings(OPIS_CD4, reduction = "wnn.umap")[, 1],
+  UMAP_2                 = Embeddings(OPIS_CD4, reduction = "wnn.umap")[, 2]
+)
+cd4_plot_df <- cd4_plot_df[is.finite(cd4_plot_df$pseudotime), ]
+
+# =============================================================================
+# 8c) BACH2 Expression Along Pseudotime — Split by OUD Status
+# =============================================================================
+
+oud_colors <- c("OUD+" = "#F54927", "OUD-" = "#1180808B")
+
+# ---- CD8: BACH2 vs Pseudotime by OUD ----------------------------------------
+p_cd8_bach2_traj <- ggplot(cd8_plot_df, aes(x = pseudotime, y = BACH2_expr, color = OUD_status)) +
+  geom_point(size = 0.3, alpha = 0.3) +
+  geom_smooth(method = "loess", se = TRUE, linewidth = 1.2) +
+  scale_color_manual(values = oud_colors, name = "OUD Status") +
+  labs(
+    x     = "Pseudotime",
+    y     = "BACH2 Expression",
+    title = "CD8 T cells — BACH2 Along Pseudotime"
+  ) +
+  theme_cowplot(font_size = 16) +
+  theme(
+    legend.position  = "right",
+    plot.background  = element_rect(fill = "white", color = NA),
+    panel.background = element_rect(fill = "white", color = NA)
+  )
+
+ggsave(file.path(bach2.out, "CD8_BACH2_vs_Pseudotime_byOUD.png"),
+       plot = p_cd8_bach2_traj, width = 10, height = 6, dpi = 300, bg = "white")
+
+# ---- CD4: BACH2 vs Pseudotime by OUD ----------------------------------------
+p_cd4_bach2_traj <- ggplot(cd4_plot_df, aes(x = pseudotime, y = BACH2_expr, color = OUD_status)) +
+  geom_point(size = 0.3, alpha = 0.3) +
+  geom_smooth(method = "loess", se = TRUE, linewidth = 1.2) +
+  scale_color_manual(values = oud_colors, name = "OUD Status") +
+  labs(
+    x     = "Pseudotime",
+    y     = "BACH2 Expression",
+    title = "CD4 T cells — BACH2 Along Pseudotime"
+  ) +
+  theme_cowplot(font_size = 16) +
+  theme(
+    legend.position  = "right",
+    plot.background  = element_rect(fill = "white", color = NA),
+    panel.background = element_rect(fill = "white", color = NA)
+  )
+
+ggsave(file.path(bach2.out, "CD4_BACH2_vs_Pseudotime_byOUD.png"),
+       plot = p_cd4_bach2_traj, width = 10, height = 6, dpi = 300, bg = "white")
+
+# ---- BACH2 on UMAP (both lineages) ------------------------------------------
+p_cd8_bach2_umap <- ggplot(cd8_plot_df, aes(x = UMAP_1, y = UMAP_2, color = BACH2_expr)) +
+  geom_point(size = 0.5, alpha = 0.7) +
+  scale_color_viridis_c(option = "magma", name = "BACH2") +
+  labs(title = "CD8 T cells — BACH2 Expression") +
+  theme_cowplot(font_size = 14) +
+  theme(
+    plot.background  = element_rect(fill = "white", color = NA),
+    panel.background = element_rect(fill = "white", color = NA)
+  ) + NoAxes()
+
+p_cd4_bach2_umap <- ggplot(cd4_plot_df, aes(x = UMAP_1, y = UMAP_2, color = BACH2_expr)) +
+  geom_point(size = 0.5, alpha = 0.7) +
+  scale_color_viridis_c(option = "magma", name = "BACH2") +
+  labs(title = "CD4 T cells — BACH2 Expression") +
+  theme_cowplot(font_size = 14) +
+  theme(
+    plot.background  = element_rect(fill = "white", color = NA),
+    panel.background = element_rect(fill = "white", color = NA)
+  ) + NoAxes()
+
+ggsave(file.path(bach2.out, "CD8_BACH2_UMAP.png"),
+       plot = p_cd8_bach2_umap, width = 8, height = 7, dpi = 300, bg = "white")
+ggsave(file.path(bach2.out, "CD4_BACH2_UMAP.png"),
+       plot = p_cd4_bach2_umap, width = 8, height = 7, dpi = 300, bg = "white")
+
+message("BACH2 plots saved to: ", bach2.out)
+
+# =============================================================================
+# 8d) Naïve/Stemness Module Score Along Pseudotime — Split by OUD Status
+# =============================================================================
+
+# ---- CD8: Module Score vs Pseudotime by OUD ----------------------------------
+p_cd8_module_traj <- ggplot(cd8_plot_df, aes(x = pseudotime, y = Naive_Stemness_Score, color = OUD_status)) +
+  geom_point(size = 0.3, alpha = 0.3) +
+  geom_smooth(method = "loess", se = TRUE, linewidth = 1.2) +
+  scale_color_manual(values = oud_colors, name = "OUD Status") +
+  labs(
+    x     = "Pseudotime",
+    y     = "Naïve/Stemness Module Score",
+    title = "CD8 T cells — Naïve/Stemness Module Along Pseudotime"
+  ) +
+  theme_cowplot(font_size = 16) +
+  theme(
+    legend.position  = "right",
+    plot.background  = element_rect(fill = "white", color = NA),
+    panel.background = element_rect(fill = "white", color = NA)
+  )
+
+ggsave(file.path(module.out, "CD8_NaiveStemness_vs_Pseudotime_byOUD.png"),
+       plot = p_cd8_module_traj, width = 10, height = 6, dpi = 300, bg = "white")
+
+# ---- CD4: Module Score vs Pseudotime by OUD ----------------------------------
+p_cd4_module_traj <- ggplot(cd4_plot_df, aes(x = pseudotime, y = Naive_Stemness_Score, color = OUD_status)) +
+  geom_point(size = 0.3, alpha = 0.3) +
+  geom_smooth(method = "loess", se = TRUE, linewidth = 1.2) +
+  scale_color_manual(values = oud_colors, name = "OUD Status") +
+  labs(
+    x     = "Pseudotime",
+    y     = "Naïve/Stemness Module Score",
+    title = "CD4 T cells — Naïve/Stemness Module Along Pseudotime"
+  ) +
+  theme_cowplot(font_size = 16) +
+  theme(
+    legend.position  = "right",
+    plot.background  = element_rect(fill = "white", color = NA),
+    panel.background = element_rect(fill = "white", color = NA)
+  )
+
+ggsave(file.path(module.out, "CD4_NaiveStemness_vs_Pseudotime_byOUD.png"),
+       plot = p_cd4_module_traj, width = 10, height = 6, dpi = 300, bg = "white")
+
+# ---- Module Score on UMAP ---------------------------------------------------
+p_cd8_module_umap <- ggplot(cd8_plot_df, aes(x = UMAP_1, y = UMAP_2, color = Naive_Stemness_Score)) +
+  geom_point(size = 0.5, alpha = 0.7) +
+  scale_color_viridis_c(option = "viridis", name = "Module\nScore") +
+  labs(title = "CD8 T cells — Naïve/Stemness Module Score") +
+  theme_cowplot(font_size = 14) +
+  theme(
+    plot.background  = element_rect(fill = "white", color = NA),
+    panel.background = element_rect(fill = "white", color = NA)
+  ) + NoAxes()
+
+p_cd4_module_umap <- ggplot(cd4_plot_df, aes(x = UMAP_1, y = UMAP_2, color = Naive_Stemness_Score)) +
+  geom_point(size = 0.5, alpha = 0.7) +
+  scale_color_viridis_c(option = "viridis", name = "Module\nScore") +
+  labs(title = "CD4 T cells — Naïve/Stemness Module Score") +
+  theme_cowplot(font_size = 14) +
+  theme(
+    plot.background  = element_rect(fill = "white", color = NA),
+    panel.background = element_rect(fill = "white", color = NA)
+  ) + NoAxes()
+
+ggsave(file.path(module.out, "CD8_NaiveStemness_UMAP.png"),
+       plot = p_cd8_module_umap, width = 8, height = 7, dpi = 300, bg = "white")
+ggsave(file.path(module.out, "CD4_NaiveStemness_UMAP.png"),
+       plot = p_cd4_module_umap, width = 8, height = 7, dpi = 300, bg = "white")
+
+message("Naïve/Stemness module plots saved to: ", module.out)
+
+# =============================================================================
+# 8e) Individual Gene Plots Along Pseudotime — Split by OUD Status
+# =============================================================================
+
+individual.out <- file.path(manuscript.root, "Naive_Stemness_Module", "Individual_Genes")
+dir.create(individual.out, recursive = TRUE, showWarnings = FALSE)
+
+module_genes <- c("BACH2", "TCF7", "LEF1", "SELL", "CCR7", "IL7R")
+
+for (gene in module_genes) {
+  
+  # Fetch expression for both objects
+  cd8_expr <- tryCatch(FetchData(OPIS_CD8, vars = gene)[, 1], error = function(e) NULL)
+  cd4_expr <- tryCatch(FetchData(OPIS_CD4, vars = gene)[, 1], error = function(e) NULL)
+  
+  # ---- CD8 ------------------------------------------------------------------
+  if (!is.null(cd8_expr)) {
+    df_cd8 <- data.frame(
+      pseudotime  = OPIS_CD8$pseudotime,
+      expression  = cd8_expr,
+      OUD_status  = OPIS_CD8$OUD_status
+    )
+    df_cd8 <- df_cd8[is.finite(df_cd8$pseudotime), ]
+    
+    p <- ggplot(df_cd8, aes(x = pseudotime, y = expression, color = OUD_status)) +
+      geom_point(size = 0.2, alpha = 0.2) +
+      geom_smooth(method = "loess", se = TRUE, linewidth = 1.2) +
+      scale_color_manual(values = oud_colors, name = "OUD Status") +
+      labs(x = "Pseudotime", y = paste0(gene, " Expression"),
+           title = paste0("CD8 T cells — ", gene, " Along Pseudotime")) +
+      theme_cowplot(font_size = 16) +
+      theme(
+        legend.position  = "right",
+        plot.background  = element_rect(fill = "white", color = NA),
+        panel.background = element_rect(fill = "white", color = NA)
+      )
+    
+    ggsave(file.path(individual.out, paste0("CD8_", gene, "_vs_Pseudotime_byOUD.png")),
+           plot = p, width = 10, height = 6, dpi = 300, bg = "white")
+  } else {
+    message("  WARNING: ", gene, " not found in CD8 object, skipping.")
+  }
+  
+  # ---- CD4 ------------------------------------------------------------------
+  if (!is.null(cd4_expr)) {
+    df_cd4 <- data.frame(
+      pseudotime  = OPIS_CD4$pseudotime,
+      expression  = cd4_expr,
+      OUD_status  = OPIS_CD4$OUD_status
+    )
+    df_cd4 <- df_cd4[is.finite(df_cd4$pseudotime), ]
+    
+    p <- ggplot(df_cd4, aes(x = pseudotime, y = expression, color = OUD_status)) +
+      geom_point(size = 0.2, alpha = 0.2) +
+      geom_smooth(method = "loess", se = TRUE, linewidth = 1.2) +
+      scale_color_manual(values = oud_colors, name = "OUD Status") +
+      labs(x = "Pseudotime", y = paste0(gene, " Expression"),
+           title = paste0("CD4 T cells — ", gene, " Along Pseudotime")) +
+      theme_cowplot(font_size = 16) +
+      theme(
+        legend.position  = "right",
+        plot.background  = element_rect(fill = "white", color = NA),
+        panel.background = element_rect(fill = "white", color = NA)
+      )
+    
+    ggsave(file.path(individual.out, paste0("CD4_", gene, "_vs_Pseudotime_byOUD.png")),
+           plot = p, width = 10, height = 6, dpi = 300, bg = "white")
+  } else {
+    message("  WARNING: ", gene, " not found in CD4 object, skipping.")
+  }
+}
+
+message("Individual gene trajectory plots saved to: ", individual.out)
+
+# =============================================================================
+# 8f) Combined Summary Panel
+# =============================================================================
+
+combined_bach2 <- (p_cd8_bach2_traj | p_cd4_bach2_traj) +
+  plot_annotation(title = "BACH2 Expression Along Pseudotime by OUD Status",
+                  theme = theme(plot.title = element_text(size = 20, face = "bold")))
+
+combined_module <- (p_cd8_module_traj | p_cd4_module_traj) +
+  plot_annotation(title = "Naïve/Stemness Module Score Along Pseudotime by OUD Status",
+                  theme = theme(plot.title = element_text(size = 20, face = "bold")))
+
+ggsave(file.path(manuscript.root, "BACH2_Pseudotime_Combined_byOUD.png"),
+       plot = combined_bach2, width = 18, height = 7, dpi = 300, bg = "white")
+
+ggsave(file.path(manuscript.root, "NaiveStemness_Pseudotime_Combined_byOUD.png"),
+       plot = combined_module, width = 18, height = 7, dpi = 300, bg = "white")
+
+message("\n=== Section 8 complete ===")
+message("Output structure:")
+message("  Manuscript_Figures/Trajectories/")
+message("  ├── BACH2/")
+message("  │   ├── CD8_BACH2_vs_Pseudotime_byOUD.png")
+message("  │   ├── CD4_BACH2_vs_Pseudotime_byOUD.png")
+message("  │   ├── CD8_BACH2_UMAP.png")
+message("  │   └── CD4_BACH2_UMAP.png")
+message("  ├── Naive_Stemness_Module/")
+message("  │   ├── CD8_NaiveStemness_vs_Pseudotime_byOUD.png")
+message("  │   ├── CD4_NaiveStemness_vs_Pseudotime_byOUD.png")
+message("  │   ├── CD8_NaiveStemness_UMAP.png")
+message("  │   ├── CD4_NaiveStemness_UMAP.png")
+message("  │   └── Individual_Genes/")
+message("  │       ├── CD8_BACH2_vs_Pseudotime_byOUD.png")
+message("  │       ├── CD4_BACH2_vs_Pseudotime_byOUD.png")
+message("  │       ├── CD8_TCF7_vs_Pseudotime_byOUD.png")
+message("  │       ├── ... (all 6 genes × 2 lineages)")
+message("  ├── BACH2_Pseudotime_Combined_byOUD.png")
+message("  └── NaiveStemness_Pseudotime_Combined_byOUD.png")

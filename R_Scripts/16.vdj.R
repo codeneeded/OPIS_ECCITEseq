@@ -551,3 +551,623 @@ qs2::qs_save(list(
 ), file = file.path(load.path, "OPIS_CD4_TCR_Combined.qs2"))
 
 message("OPIS TCR pipeline complete.")
+
+###############################################################################
+# OPIS TCR Pipeline — Extensions
+# ============================================================================
+# Append after section 11 of the main TCR script (or source() after that
+# script has finished running and the OPIS_CD4 / OPIS_CD8 / OPIS_CD?_Trex
+# objects are in the environment).
+#
+# Adds:
+#   12.  Config & helpers
+#   13.  Per-participant log clone-size distribution
+#   14.  Clonal expansion: OUD- vs OUD+ (stacked bar + UMAP contour)
+#   15.  DGE: OUD+ clones vs OUD- clones (CD4 & CD8)
+#   16.  DGE: clones vs non-clones in CD8 TEMRA & CD8 Innate-like
+#   17.  HIV / CMV / Unknown specificity classification (helper)
+#   18.  UMAP overlay: HIV-specific CD8 cells, split by OUD
+#   19.  Cluster frequency of HIV-specific cells per CD8 cluster x OUD
+#   20.  % cells in expanded clones per specificity, split by OUD
+#   21.  DGE: HIV-specific vs CMV-specific cells (CD8)
+#   22.  Waffle charts (replacement for the broken pie chart panel)
+###############################################################################
+
+# Required if you're sourcing this stand-alone (already loaded by main script):
+suppressPackageStartupMessages({
+  library(Seurat)
+  library(scRepertoire)
+  library(Trex)
+  library(tidyverse)
+  library(cowplot)
+  library(scCustomize)
+  library(Polychrome)
+  library(scales)
+  library(qs2)
+})
+
+###############################################################################
+# OPTIONAL: STANDALONE LOAD --------------------------------------------------
+# Uncomment this block if you're running this file independently (not pasted
+# at the end of the main TCR script). Reads the qs2 files written at the end
+# of the main script and rebuilds the variables this script expects.
+###############################################################################
+
+# load.path <- "/home/akshay-iyer/Documents/OPIS_ECCITEseq/saved_R_data"
+# out.root  <- "~/Documents/OPIS_ECCITEseq/VDJ/TCR"
+# red_name  <- "wnn.umap"   # change if your reduction is named differently
+#
+# cd8_pkg <- qs2::qs_read(file.path(load.path, "OPIS_CD8_TCR_Combined.qs2"))
+# cd4_pkg <- qs2::qs_read(file.path(load.path, "OPIS_CD4_TCR_Combined.qs2"))
+#
+# OPIS_CD8 <- cd8_pkg$OPIS_CD8
+# OPIS_CD4 <- cd4_pkg$OPIS_CD4
+#
+# OPIS_CD8_Trex <- list(ed0 = cd8_pkg$OPIS_CD8_ED0,
+#                       ed1 = cd8_pkg$OPIS_CD8_ED1,
+#                       ed2 = cd8_pkg$OPIS_CD8_ED2)
+# OPIS_CD4_Trex <- list(ed0 = cd4_pkg$OPIS_CD4_ED0,
+#                       ed1 = cd4_pkg$OPIS_CD4_ED1,
+#                       ed2 = cd4_pkg$OPIS_CD4_ED2)
+#
+# # Rebuild the long-format `$table` that section 22 (waffle charts) expects.
+# # Mirrors the to_df()/rename_with() block from the main script.
+# build_combined_trex_table <- function(ed0, ed1, ed2) {
+#   to_df <- function(o) {
+#     o@meta.data %>%
+#       dplyr::mutate(cells = rownames(.)) %>%
+#       dplyr::select(cells,
+#                     PID = orig.ident,
+#                     dplyr::any_of(c("OUD_status","celltype_annotation",
+#                                     "seurat_clusters")),
+#                     CTstrict, clonalFrequency,
+#                     dplyr::starts_with("TRB_")) %>%
+#       dplyr::filter(!is.na(clonalFrequency) & clonalFrequency > 1)
+#   }
+#   df0 <- to_df(ed0) %>% dplyr::rename_with(~ paste0(., "_ED0"), dplyr::starts_with("TRB_"))
+#   df1 <- to_df(ed1) %>% dplyr::rename_with(~ paste0(., "_ED1"), dplyr::starts_with("TRB_"))
+#   df2 <- to_df(ed2) %>% dplyr::rename_with(~ paste0(., "_ED2"), dplyr::starts_with("TRB_"))
+#   key_cols <- intersect(c("cells","PID","OUD_status","celltype_annotation",
+#                           "seurat_clusters","CTstrict","clonalFrequency"),
+#                         colnames(df0))
+#   df0 %>% dplyr::full_join(df1, by = key_cols) %>%
+#           dplyr::full_join(df2, by = key_cols)
+# }
+# OPIS_CD8_Trex$table <- build_combined_trex_table(
+#   OPIS_CD8_Trex$ed0, OPIS_CD8_Trex$ed1, OPIS_CD8_Trex$ed2)
+# OPIS_CD4_Trex$table <- build_combined_trex_table(
+#   OPIS_CD4_Trex$ed0, OPIS_CD4_Trex$ed1, OPIS_CD4_Trex$ed2)
+
+###############################################################################
+# 12. Config & helpers ------------------------------------------------------
+###############################################################################
+
+# OUD metadata
+oud_col      <- "OUD_status"
+oud_pos      <- "OUD+"
+oud_neg      <- "OUD-"
+oud_palette  <- c(`OUD-` = "#3B7FB8", `OUD+` = "#D95F02")
+
+# Cell-type annotation column (same one used in module-score script)
+celltype_col <- "celltype_annotation"
+
+# Specific clusters of interest for clones-vs-nonclones DGE
+temra_label  <- "CD8+ TEMRA"
+innate_label <- "Innate-like T"
+
+# Trex object to use for specificity calls (ED0 = exact, ED1 = ≤1 mismatch, ED2 = ≤2)
+# ED1 is a reasonable balance; change to ed0 for stricter calls
+trex_obj_cd8 <- OPIS_CD8_Trex$ed1
+trex_obj_cd4 <- OPIS_CD4_Trex$ed1
+
+# Reduction (already set as red_name in main script; reuse if present)
+if (!exists("red_name")) red_name <- "wnn.umap"
+
+# Output dirs
+oud_dir    <- file.path(out.root, "OUD_Comparisons");  dir.create(oud_dir,    recursive = TRUE, showWarnings = FALSE)
+dge_dir    <- file.path(out.root, "DGE");              dir.create(dge_dir,    recursive = TRUE, showWarnings = FALSE)
+spec_dir   <- file.path(out.root, "Specificity");      dir.create(spec_dir,   recursive = TRUE, showWarnings = FALSE)
+waffle_dir <- file.path(out.root, "Trex", "Waffle");   dir.create(waffle_dir, recursive = TRUE, showWarnings = FALSE)
+
+# --- Helper: classify cells as expanded / non-expanded -----------------------
+# combineExpression() turns cloneSize into labels like "Single (0 < X <= 1)".
+# Anything beyond the smallest bin counts as expanded.
+mark_expanded <- function(obj) {
+  cs <- as.character(obj$cloneSize)
+  obj$has_TCR     <- !is.na(cs)
+  obj$is_expanded <- obj$has_TCR & !grepl("^Single", cs)
+  obj
+}
+OPIS_CD8     <- mark_expanded(OPIS_CD8)
+OPIS_CD4     <- mark_expanded(OPIS_CD4)
+trex_obj_cd8 <- mark_expanded(trex_obj_cd8)
+trex_obj_cd4 <- mark_expanded(trex_obj_cd4)
+
+# --- Helper: safe cluster-cell extraction ------------------------------------
+cells_in_cluster <- function(obj, cluster_label) {
+  rownames(obj@meta.data)[
+    !is.na(obj@meta.data[[celltype_col]]) &
+      obj@meta.data[[celltype_col]] == cluster_label
+  ]
+}
+
+###############################################################################
+# 13. Per-participant log clone-size distribution ---------------------------
+###############################################################################
+# For each PID, compute one row per unique clone with its size, normalize to
+# clones-per-1000-cells in that PID, then log-transform.
+# Plot one violin per PID coloured by OUD status.
+
+clone_size_distribution <- function(obj, tag) {
+  
+  df <- obj@meta.data %>%
+    dplyr::filter(!is.na(CTstrict)) %>%
+    dplyr::group_by(orig.ident, CTstrict) %>%
+    dplyr::summarise(n_cells = dplyr::n(), .groups = "drop_last") %>%
+    dplyr::mutate(per_1k     = n_cells / sum(n_cells) * 1000,
+                  log_n      = log10(n_cells),
+                  log_per_1k = log10(per_1k)) %>%
+    dplyr::ungroup()
+  
+  meta_pid <- obj@meta.data %>%
+    dplyr::distinct(orig.ident, .data[[oud_col]])
+  df <- df %>% dplyr::left_join(meta_pid, by = "orig.ident")
+  
+  write.csv(df,
+            file.path(oud_dir, paste0("CloneSizeDistribution_", tag, ".csv")),
+            row.names = FALSE)
+  
+  # Order PIDs by OUD group then by name
+  pid_order <- meta_pid %>%
+    dplyr::arrange(.data[[oud_col]], orig.ident) %>%
+    dplyr::pull(orig.ident)
+  df$orig.ident <- factor(df$orig.ident, levels = pid_order)
+  
+  p <- ggplot(df, aes(x = orig.ident, y = log_per_1k,
+                      fill = .data[[oud_col]])) +
+    geom_violin(scale = "width", trim = TRUE, alpha = 0.75,
+                color = "grey20", linewidth = 0.3) +
+    geom_jitter(width = 0.12, size = 0.4, alpha = 0.45, color = "grey25") +
+    scale_fill_manual(values = oud_palette, name = "OUD") +
+    labs(x = NULL,
+         y = expression(log[10]("clones per 1000 cells")),
+         title = paste0(tag,
+                        ": clone-size distribution per participant")) +
+    theme_cowplot(font_size = 14) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1),
+          plot.title  = element_text(face = "bold", hjust = 0.5))
+  
+  ggsave(file.path(oud_dir, paste0("CloneSizeDistribution_", tag, ".png")),
+         p, width = max(8, length(pid_order) * 0.45),
+         height = 6, dpi = 300, bg = "white")
+}
+clone_size_distribution(OPIS_CD8, "CD8")
+clone_size_distribution(OPIS_CD4, "CD4")
+
+###############################################################################
+# 14. Clonal expansion: OUD- vs OUD+ ----------------------------------------
+###############################################################################
+# (a) Stacked bar of cloneSize categories per OUD group
+
+expansion_stacked <- function(obj, tag) {
+  
+  df <- obj@meta.data %>%
+    dplyr::filter(!is.na(cloneSize)) %>%
+    dplyr::count(.data[[oud_col]], cloneSize) %>%
+    dplyr::group_by(.data[[oud_col]]) %>%
+    dplyr::mutate(prop = n / sum(n)) %>%
+    dplyr::ungroup()
+  
+  desired <- c("Hyperexpanded","Large","Medium","Small","Single")
+  bin_lvl <- levels(factor(df$cloneSize))
+  ordered <- bin_lvl[order(match(
+    sapply(strsplit(bin_lvl, " "), `[`, 1), desired))]
+  df$cloneSize <- factor(df$cloneSize, levels = ordered)
+  
+  bin_pal <- rev(RColorBrewer::brewer.pal(
+    n = max(3, length(ordered)), name = "Spectral"))[seq_along(ordered)]
+  names(bin_pal) <- ordered
+  
+  p <- ggplot(df, aes(x = .data[[oud_col]], y = prop, fill = cloneSize)) +
+    geom_col(width = 0.7, color = "grey15", linewidth = 0.3) +
+    scale_y_continuous(labels = scales::percent_format(),
+                       expand = expansion(mult = c(0, 0.02))) +
+    scale_fill_manual(values = bin_pal, name = "Clone size") +
+    labs(x = NULL, y = "Proportion of cells",
+         title = paste0(tag,
+                        ": clonal expansion composition by OUD status")) +
+    theme_cowplot(font_size = 14) +
+    theme(plot.title = element_text(face = "bold", hjust = 0.5))
+  
+  ggsave(file.path(oud_dir,
+                   paste0("ClonalExpansion_StackedBar_", tag, ".png")),
+         p, width = 7, height = 6, dpi = 300, bg = "white")
+}
+expansion_stacked(OPIS_CD8, "CD8")
+expansion_stacked(OPIS_CD4, "CD4")
+
+# (b) UMAP contour overlay faceted by OUD
+# cutpoint = 2 -> clonalOverlay keeps only cells with clonalFrequency >= 2,
+# so singletons are excluded from the density estimate.
+contour_by_oud <- function(obj, tag) {
+  if (!(red_name %in% Reductions(obj))) {
+    message("Reduction '", red_name, "' not found in ", tag,
+            "; skipping contour."); return(invisible())
+  }
+  p <- clonalOverlay(obj, reduction = red_name,
+                     cutpoint = 2, bins = 25, facet.by = oud_col) +
+    guides(color = "none") +
+    ggtitle(paste0(tag,
+                   ": clonal density contours by OUD (singletons excluded)")) +
+    theme(plot.title = element_text(face = "bold", hjust = 0.5))
+  ggsave(file.path(oud_dir, paste0("ClonalOverlay_", tag, "_byOUD.png")),
+         p, width = 14, height = 7, dpi = 300, bg = "white")
+}
+contour_by_oud(OPIS_CD8, "CD8")
+contour_by_oud(OPIS_CD4, "CD4")
+
+###############################################################################
+# 15. DGE: OUD+ clones vs OUD- clones ---------------------------------------
+###############################################################################
+dge_oud_clones <- function(obj, tag) {
+  
+  cells_clonal <- rownames(obj@meta.data)[obj@meta.data$is_expanded]
+  if (length(cells_clonal) < 10) {
+    message("Too few clonal cells for ", tag, " OUD DGE."); return(NULL)
+  }
+  obj_c <- subset(obj, cells = cells_clonal)
+  n_pos <- sum(obj_c@meta.data[[oud_col]] == oud_pos, na.rm = TRUE)
+  n_neg <- sum(obj_c@meta.data[[oud_col]] == oud_neg, na.rm = TRUE)
+  if (n_pos < 5 || n_neg < 5) {
+    message("Too few cells per OUD group in ", tag,
+            " (OUD+=", n_pos, ", OUD-=", n_neg, ")"); return(NULL)
+  }
+  
+  Idents(obj_c) <- obj_c@meta.data[[oud_col]]
+  m <- FindMarkers(obj_c, ident.1 = oud_pos, ident.2 = oud_neg,
+                   logfc.threshold = 0.1, min.pct = 0.1)
+  m$gene <- rownames(m)
+  m <- m %>% dplyr::arrange(p_val_adj, dplyr::desc(abs(avg_log2FC)))
+  
+  write.csv(m, file.path(dge_dir,
+                         paste0(tag, "_OUDpos_vs_OUDneg_clones.csv")), row.names = FALSE)
+  m
+}
+dge_cd8_oud <- dge_oud_clones(OPIS_CD8, "CD8")
+dge_cd4_oud <- dge_oud_clones(OPIS_CD4, "CD4")
+
+###############################################################################
+# 16. DGE: clones vs non-clones in CD8 TEMRA & CD8 Innate-like ---------------
+###############################################################################
+dge_clones_vs_nonclones <- function(obj, cluster_label, file_tag) {
+  
+  cells <- cells_in_cluster(obj, cluster_label)
+  if (length(cells) < 20) {
+    message("Cluster '", cluster_label, "' has only ", length(cells),
+            " cells; skipping."); return(NULL)
+  }
+  obj_sub <- subset(obj, cells = cells)
+  obj_sub <- subset(obj_sub,
+                    cells = rownames(obj_sub@meta.data)[obj_sub$has_TCR])
+  
+  n_clo <- sum(obj_sub$is_expanded, na.rm = TRUE)
+  n_non <- sum(!obj_sub$is_expanded, na.rm = TRUE)
+  if (n_clo < 5 || n_non < 5) {
+    message("Too few cells in ", cluster_label,
+            " (clonal=", n_clo, ", non-clonal=", n_non, ")"); return(NULL)
+  }
+  
+  obj_sub$clone_status <- ifelse(obj_sub$is_expanded, "Clonal", "NonClonal")
+  Idents(obj_sub) <- obj_sub$clone_status
+  m <- FindMarkers(obj_sub, ident.1 = "Clonal", ident.2 = "NonClonal",
+                   logfc.threshold = 0.1, min.pct = 0.1)
+  m$gene <- rownames(m)
+  m <- m %>% dplyr::arrange(p_val_adj, dplyr::desc(abs(avg_log2FC)))
+  
+  write.csv(m, file.path(dge_dir,
+                         paste0("CD8_", file_tag, "_Clonal_vs_NonClonal.csv")),
+            row.names = FALSE)
+  m
+}
+dge_temra  <- dge_clones_vs_nonclones(OPIS_CD8, temra_label,  "TEMRA")
+dge_innate <- dge_clones_vs_nonclones(OPIS_CD8, innate_label, "InnateLike")
+
+###############################################################################
+# 17. HIV / CMV specificity classification ----------------------------------
+###############################################################################
+# Sets a 3-level factor `specificity` on a Trex object:
+#   HIV   if TRB_Epitope.species mentions HIV
+#   CMV   if TRB_Epitope.species mentions CMV / Cytomegalovirus
+#   Unknown otherwise
+# Cells with no TCR also fall in Unknown — keep that in mind for denominators.
+
+classify_specificity <- function(obj) {
+  meta <- obj@meta.data
+  spec <- rep("Unknown", nrow(meta))
+  
+  if ("TRB_Epitope.species" %in% colnames(meta)) {
+    sp <- as.character(meta[["TRB_Epitope.species"]])
+    is_hiv <- grepl("HIV|Human immunodeficiency virus", sp, ignore.case = TRUE)
+    is_cmv <- grepl("CMV|Cytomegalovirus",              sp, ignore.case = TRUE)
+    spec[is_hiv]            <- "HIV"
+    spec[is_cmv & !is_hiv]  <- "CMV"
+  } else {
+    warning("TRB_Epitope.species not found; all cells will be 'Unknown'.")
+  }
+  obj$specificity <- factor(spec, levels = c("HIV","CMV","Unknown"))
+  obj
+}
+trex_obj_cd8 <- classify_specificity(trex_obj_cd8)
+trex_obj_cd4 <- classify_specificity(trex_obj_cd4)
+
+cat("\nCD8 specificity counts:\n");
+print(table(trex_obj_cd8$specificity, trex_obj_cd8@meta.data[[oud_col]],
+            useNA = "ifany"))
+cat("\nCD4 specificity counts:\n");
+print(table(trex_obj_cd4$specificity, trex_obj_cd4@meta.data[[oud_col]],
+            useNA = "ifany"))
+
+###############################################################################
+# 18. UMAP overlay: HIV-specific CD8, split by OUD --------------------------
+###############################################################################
+hiv_cells_cd8 <- rownames(trex_obj_cd8@meta.data)[
+  trex_obj_cd8$specificity == "HIV"]
+cmv_cells_cd8 <- rownames(trex_obj_cd8@meta.data)[
+  trex_obj_cd8$specificity == "CMV"]
+
+if (length(hiv_cells_cd8) > 0 && red_name %in% Reductions(trex_obj_cd8)) {
+  p <- DimPlot(trex_obj_cd8, reduction = red_name,
+               cells.highlight = list(`HIV-specific` = hiv_cells_cd8),
+               cols.highlight  = "#C4463A", cols = "grey85",
+               sizes.highlight = 1.6, pt.size = 0.4,
+               split.by = oud_col) +
+    ggtitle(paste0("CD8: HIV-specific cells (n = ",
+                   length(hiv_cells_cd8), ") by OUD")) +
+    theme(plot.title = element_text(face = "bold", hjust = 0.5))
+  ggsave(file.path(spec_dir, "HIVspecific_UMAP_CD8_byOUD.png"),
+         p, width = 14, height = 7, dpi = 300, bg = "white")
+} else {
+  message("No HIV-specific CD8 cells found — skipping UMAP overlay.")
+}
+
+if (length(cmv_cells_cd8) > 0 && red_name %in% Reductions(trex_obj_cd8)) {
+  p <- DimPlot(trex_obj_cd8, reduction = red_name,
+               cells.highlight = list(`CMV-specific` = cmv_cells_cd8),
+               cols.highlight  = "#3B7FB8", cols = "grey85",
+               sizes.highlight = 1.6, pt.size = 0.4,
+               split.by = oud_col) +
+    ggtitle(paste0("CD8: CMV-specific cells (n = ",
+                   length(cmv_cells_cd8), ") by OUD")) +
+    theme(plot.title = element_text(face = "bold", hjust = 0.5))
+  ggsave(file.path(spec_dir, "CMVspecific_UMAP_CD8_byOUD.png"),
+         p, width = 14, height = 7, dpi = 300, bg = "white")
+}
+
+###############################################################################
+# 19. Cluster frequency of HIV-specific cells per CD8 cluster x OUD ---------
+###############################################################################
+freq_df <- trex_obj_cd8@meta.data %>%
+  dplyr::filter(!is.na(.data[[celltype_col]]),
+                !is.na(.data[[oud_col]])) %>%
+  dplyr::group_by(.data[[celltype_col]], .data[[oud_col]]) %>%
+  dplyr::summarise(total_cells = dplyr::n(),
+                   n_HIV   = sum(specificity == "HIV"),
+                   n_CMV   = sum(specificity == "CMV"),
+                   pct_HIV = 100 * n_HIV / total_cells,
+                   pct_CMV = 100 * n_CMV / total_cells,
+                   .groups = "drop")
+write.csv(freq_df, file.path(spec_dir,
+                             "CD8_HIV_CMV_freq_byCluster_OUD.csv"), row.names = FALSE)
+
+p_hiv <- ggplot(freq_df,
+                aes(x = .data[[celltype_col]], y = pct_HIV,
+                    fill = .data[[oud_col]])) +
+  geom_col(position = position_dodge(width = 0.8),
+           width = 0.7, color = "grey15", linewidth = 0.3) +
+  geom_text(aes(label = sprintf("%.2f", pct_HIV)),
+            position = position_dodge(width = 0.8),
+            vjust = -0.4, size = 3.5) +
+  scale_fill_manual(values = oud_palette, name = "OUD") +
+  labs(x = NULL, y = "% HIV-specific cells per cluster",
+       title = "CD8: HIV-specific frequency per cluster, by OUD") +
+  theme_cowplot(font_size = 14) +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1, face = "bold"),
+        plot.title  = element_text(face = "bold", hjust = 0.5))
+ggsave(file.path(spec_dir, "CD8_HIV_freq_byCluster_OUD.png"),
+       p_hiv, width = 12, height = 6, dpi = 300, bg = "white")
+
+# Optional: same plot for CMV — useful for context
+p_cmv <- ggplot(freq_df,
+                aes(x = .data[[celltype_col]], y = pct_CMV,
+                    fill = .data[[oud_col]])) +
+  geom_col(position = position_dodge(width = 0.8),
+           width = 0.7, color = "grey15", linewidth = 0.3) +
+  geom_text(aes(label = sprintf("%.2f", pct_CMV)),
+            position = position_dodge(width = 0.8),
+            vjust = -0.4, size = 3.5) +
+  scale_fill_manual(values = oud_palette, name = "OUD") +
+  labs(x = NULL, y = "% CMV-specific cells per cluster",
+       title = "CD8: CMV-specific frequency per cluster, by OUD") +
+  theme_cowplot(font_size = 14) +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1, face = "bold"),
+        plot.title  = element_text(face = "bold", hjust = 0.5))
+ggsave(file.path(spec_dir, "CD8_CMV_freq_byCluster_OUD.png"),
+       p_cmv, width = 12, height = 6, dpi = 300, bg = "white")
+
+###############################################################################
+# 20. % cells in expanded clones per specificity, split by OUD --------------
+###############################################################################
+exp_df <- trex_obj_cd8@meta.data %>%
+  dplyr::filter(has_TCR, !is.na(.data[[oud_col]])) %>%
+  dplyr::group_by(.data[[oud_col]], specificity) %>%
+  dplyr::summarise(total_cells  = dplyr::n(),
+                   expanded     = sum(is_expanded),
+                   pct_expanded = 100 * expanded / total_cells,
+                   .groups = "drop")
+write.csv(exp_df, file.path(spec_dir,
+                            "CD8_PctExpanded_BySpecificity_OUD.csv"), row.names = FALSE)
+
+p <- ggplot(exp_df, aes(x = specificity, y = pct_expanded,
+                        fill = .data[[oud_col]])) +
+  geom_col(position = position_dodge(width = 0.8),
+           width = 0.7, color = "grey15", linewidth = 0.3) +
+  geom_text(aes(label = sprintf("%.1f%%\n(n=%d)", pct_expanded, total_cells)),
+            position = position_dodge(width = 0.8),
+            vjust = -0.2, size = 3.5, lineheight = 0.95) +
+  scale_fill_manual(values = oud_palette, name = "OUD") +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.18))) +
+  labs(x = "Antigen specificity", y = "% cells in expanded clones",
+       title = "CD8: clonal expansion per specificity, by OUD") +
+  theme_cowplot(font_size = 14) +
+  theme(plot.title = element_text(face = "bold", hjust = 0.5))
+ggsave(file.path(spec_dir, "CD8_PctExpanded_BySpecificity_OUD.png"),
+       p, width = 8, height = 6, dpi = 300, bg = "white")
+
+###############################################################################
+# 21. DGE: HIV-specific vs CMV-specific cells (CD8) -------------------------
+###############################################################################
+if (length(hiv_cells_cd8) >= 5 && length(cmv_cells_cd8) >= 5) {
+  Idents(trex_obj_cd8) <- trex_obj_cd8$specificity
+  dge_hiv_cmv <- FindMarkers(trex_obj_cd8,
+                             ident.1 = "HIV", ident.2 = "CMV",
+                             logfc.threshold = 0.1, min.pct = 0.1)
+  dge_hiv_cmv$gene <- rownames(dge_hiv_cmv)
+  dge_hiv_cmv <- dge_hiv_cmv %>%
+    dplyr::arrange(p_val_adj, dplyr::desc(abs(avg_log2FC)))
+  write.csv(dge_hiv_cmv,
+            file.path(dge_dir, "CD8_HIV_vs_CMV_DGE.csv"), row.names = FALSE)
+} else {
+  message("Skipping HIV vs CMV DGE: HIV=", length(hiv_cells_cd8),
+          ", CMV=", length(cmv_cells_cd8))
+}
+
+###############################################################################
+# 22. Waffle charts (replacement for the broken pie panel) ------------------
+###############################################################################
+# Each tile = 1% of cells (weighted by clonalFrequency) in that PID/edit-distance
+# combination, colored by epitope species. Faceted by edit distance per PID.
+# Uses base ggplot2 (no `waffle` package needed).
+
+build_waffle_data <- function(combined_df) {
+  
+  long_target <- combined_df %>%
+    tidyr::pivot_longer(cols = tidyr::starts_with("TRB_Epitope.species"),
+                        names_to     = "Edit_Distance",
+                        names_pattern = "TRB_Epitope.species_(.*)",
+                        values_to    = "Epitope_Species") %>%
+    dplyr::mutate(
+      Epitope_Species = ifelse(is.na(Epitope_Species),
+                               "Unknown", Epitope_Species),
+      # Compress >2-element semicolon lists to keep legend manageable
+      Epitope_Species_short = vapply(strsplit(Epitope_Species, ";"),
+                                     function(x) if (length(x) > 2) paste0(x[1], ";", x[2], "...")
+                                     else paste(x, collapse = ";"), character(1)))
+  
+  long_target %>%
+    dplyr::group_by(PID, Edit_Distance, Epitope_Species_short) %>%
+    dplyr::summarise(Total = sum(clonalFrequency, na.rm = TRUE),
+                     .groups = "drop") %>%
+    dplyr::group_by(PID, Edit_Distance) %>%
+    dplyr::mutate(pct = 100 * Total / sum(Total)) %>%
+    dplyr::ungroup()
+}
+
+# Build a 100-tile (10x10) grid for one PID, one edit distance
+make_tile_grid <- function(species_vec, pct_vec) {
+  # Largest-remainder rounding so tiles sum to exactly 100
+  raw    <- pct_vec
+  floors <- floor(raw)
+  rem    <- raw - floors
+  short  <- 100 - sum(floors)
+  if (short > 0) {
+    bumps <- order(rem, decreasing = TRUE)[seq_len(short)]
+    floors[bumps] <- floors[bumps] + 1L
+  }
+  ord <- order(pct_vec, decreasing = TRUE)
+  rep(species_vec[ord], floors[ord])
+}
+
+waffle_plot_one_pid <- function(pct_data, palette, pid, tag) {
+  
+  pid_data <- pct_data %>% dplyr::filter(PID == pid)
+  if (nrow(pid_data) == 0) return(invisible(NULL))
+  
+  tile_df <- pid_data %>%
+    dplyr::group_by(Edit_Distance) %>%
+    dplyr::summarise(
+      grid = list(make_tile_grid(Epitope_Species_short, pct)),
+      .groups = "drop") %>%
+    tidyr::unnest(cols = grid) %>%
+    dplyr::group_by(Edit_Distance) %>%
+    dplyr::mutate(idx = dplyr::row_number(),
+                  x   = ((idx - 1) %% 10) + 1,
+                  y   = floor((idx - 1) / 10) + 1) %>%
+    dplyr::ungroup()
+  
+  ed_levels <- sort(unique(tile_df$Edit_Distance))
+  tile_df$Edit_Distance <- factor(tile_df$Edit_Distance, levels = ed_levels)
+  
+  ggplot(tile_df, aes(x = x, y = y, fill = grid)) +
+    geom_tile(color = "white", linewidth = 0.7) +
+    facet_wrap(~ Edit_Distance, ncol = length(ed_levels)) +
+    scale_fill_manual(values = palette, na.value = "grey92",
+                      name = "Epitope species") +
+    coord_equal() +
+    scale_y_reverse() +
+    labs(title = paste0("OPIS ", tag, " — ", pid),
+         subtitle = "Each tile = 1% of cells (weighted by clonal frequency)",
+         x = NULL, y = NULL) +
+    theme_void(base_size = 13) +
+    theme(strip.text       = element_text(size = 12, face = "bold",
+                                          margin = margin(b = 6)),
+          legend.position  = "bottom",
+          legend.text      = element_text(size = 10),
+          legend.key.size  = unit(0.6, "lines"),
+          plot.title       = element_text(face = "bold", hjust = 0.5),
+          plot.subtitle    = element_text(hjust = 0.5,
+                                          margin = margin(b = 8)),
+          plot.background  = element_rect(fill = "white", color = NA),
+          panel.spacing    = unit(1.2, "lines")) +
+    guides(fill = guide_legend(nrow = 4, byrow = TRUE,
+                               override.aes = list(color = NA)))
+}
+
+run_waffles <- function(combined_table, tag) {
+  
+  pct_data <- build_waffle_data(combined_table)
+  if (nrow(pct_data) == 0) {
+    message("No waffle data for ", tag, "."); return(invisible())
+  }
+  
+  all_labels <- sort(unique(pct_data$Epitope_Species_short))
+  palette <- as.character(Polychrome::createPalette(
+    N = max(length(all_labels), 3),
+    seedcolors = c("#E41A1C","#377EB8","#4DAF4A","#FF7F00")))[
+      seq_along(all_labels)]
+  names(palette) <- all_labels
+  # Force "Unknown" to a neutral grey
+  if ("Unknown" %in% names(palette)) palette["Unknown"] <- "grey75"
+  
+  out_dir <- file.path(waffle_dir, tag)
+  dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
+  
+  pids <- unique(pct_data$PID)
+  for (pid in pids) {
+    p <- waffle_plot_one_pid(pct_data, palette, pid, tag)
+    if (is.null(p)) next
+    n_facets <- length(unique(pct_data$Edit_Distance[pct_data$PID == pid]))
+    ggsave(file.path(out_dir, paste0(pid, "_waffle.png")),
+           p, width = max(6, n_facets * 4.2),
+           height = 7, dpi = 300, bg = "white")
+  }
+  message("Wrote ", length(pids), " waffle charts -> ", out_dir)
+}
+
+run_waffles(OPIS_CD8_Trex$table, "CD8")
+run_waffles(OPIS_CD4_Trex$table, "CD4")
+
+message("\nOPIS TCR extension analyses complete.")
+message("  OUD comparisons -> ", oud_dir)
+message("  DGE             -> ", dge_dir)
+message("  Specificity     -> ", spec_dir)
+message("  Waffle charts   -> ", waffle_dir)

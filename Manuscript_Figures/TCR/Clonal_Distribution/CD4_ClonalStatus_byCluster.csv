@@ -1,0 +1,17 @@
+"celltype_annotation","clone_status","n","prop"
+"Activated CD4+ Naïve","Non-clonal",651,1
+"Activated CD4+ memory","Clonal",4,0.027972027972028
+"Activated CD4+ memory","Non-clonal",139,0.972027972027972
+"CD4+ KLRG1+ Tem","Clonal",322,0.636363636363636
+"CD4+ KLRG1+ Tem","Non-clonal",184,0.363636363636364
+"CD4+ Memory","Clonal",4,0.0218579234972678
+"CD4+ Memory","Non-clonal",179,0.978142076502732
+"CD4+ Naïve","Clonal",10,0.00231535077564251
+"CD4+ Naïve","Non-clonal",4309,0.997684649224358
+"CD4+ Tcm","Clonal",126,0.0245136186770428
+"CD4+ Tcm","Non-clonal",5014,0.975486381322957
+"CD4+ Treg","Clonal",5,0.00624219725343321
+"CD4+ Treg","Non-clonal",796,0.993757802746567
+"CD4+ Tscm-like ","Non-clonal",133,1
+"CD4+ term memory","Clonal",2,0.00843881856540084
+"CD4+ term memory","Non-clonal",235,0.991561181434599

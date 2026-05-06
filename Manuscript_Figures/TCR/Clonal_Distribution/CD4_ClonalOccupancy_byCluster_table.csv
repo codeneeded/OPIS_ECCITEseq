@@ -1,0 +1,21 @@
+"celltype_annotation","cloneSize","n"
+"Activated CD4+ Naïve","Single (0 < X <= 1)",651
+"Activated CD4+ memory","Medium (5 < X <= 20)",1
+"Activated CD4+ memory","Small (1 < X <= 5)",3
+"Activated CD4+ memory","Single (0 < X <= 1)",139
+"CD4+ KLRG1+ Tem","Large (20 < X <= 100)",46
+"CD4+ KLRG1+ Tem","Medium (5 < X <= 20)",138
+"CD4+ KLRG1+ Tem","Small (1 < X <= 5)",138
+"CD4+ KLRG1+ Tem","Single (0 < X <= 1)",184
+"CD4+ Memory","Small (1 < X <= 5)",4
+"CD4+ Memory","Single (0 < X <= 1)",179
+"CD4+ Naïve","Small (1 < X <= 5)",10
+"CD4+ Naïve","Single (0 < X <= 1)",4309
+"CD4+ Tcm","Medium (5 < X <= 20)",3
+"CD4+ Tcm","Small (1 < X <= 5)",123
+"CD4+ Tcm","Single (0 < X <= 1)",5014
+"CD4+ Treg","Small (1 < X <= 5)",5
+"CD4+ Treg","Single (0 < X <= 1)",796
+"CD4+ Tscm-like ","Single (0 < X <= 1)",133
+"CD4+ term memory","Small (1 < X <= 5)",2
+"CD4+ term memory","Single (0 < X <= 1)",235

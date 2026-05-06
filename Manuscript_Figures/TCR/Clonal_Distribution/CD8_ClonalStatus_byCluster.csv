@@ -1,0 +1,19 @@
+"celltype_annotation","clone_status","n","prop"
+"Activated cytotoxic CD8+","Clonal",91,0.535294117647059
+"Activated cytotoxic CD8+","Non-clonal",79,0.464705882352941
+"CD8+ Memory","Clonal",322,0.127828503374355
+"CD8+ Memory","Non-clonal",2197,0.872171496625645
+"CD8+ Naïve","Clonal",37,0.00967067433350758
+"CD8+ Naïve","Non-clonal",3789,0.990329325666492
+"CD8+ TEMRA","Clonal",4249,0.89245956731779
+"CD8+ TEMRA","Non-clonal",512,0.10754043268221
+"CD8+ Tem","Clonal",2756,0.640334572490706
+"CD8+ Tem","Non-clonal",1548,0.359665427509294
+"CD8+ Tem (PRF1+)","Clonal",1930,0.794565664882668
+"CD8+ Tem (PRF1+)","Non-clonal",499,0.205434335117332
+"Innate-like T","Clonal",283,0.58592132505176
+"Innate-like T","Non-clonal",200,0.41407867494824
+"NK-like CD8+","Clonal",293,0.634199134199134
+"NK-like CD8+","Non-clonal",169,0.365800865800866
+"ɣδ T","Clonal",77,0.865168539325843
+"ɣδ T","Non-clonal",12,0.134831460674157

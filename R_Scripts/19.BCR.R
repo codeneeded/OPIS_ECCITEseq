@@ -537,3 +537,108 @@ write.csv(round(pct_adt, 2), file.path(avg.dir, "PctExpr_ADT.csv"))
 
 message("Average-expression tables written to: ", avg.dir)
 message("Done.")
+
+# =============================================================================
+# CLEAN + ANNOTATE B-cell subclusters
+#   - Removes contaminant / doublet subclusters (NO re-clustering; keeps the
+#     existing PCA / WNN / wnn.umap embedding -- cheap, just drops cells)
+#   - Assigns a manual identity to each surviving subcluster
+#   - Justification for every call is documented inline
+#   Run AFTER subclustering + marker/avg-expr export, with OPIS_BCELL in memory.
+# =============================================================================
+
+# ---- 1. Drop contaminant / doublet subclusters -------------------------------
+# These three are NOT B-cell states -- they are doublets / ambient contamination,
+# and account for much of the apparent over-fragmentation:
+#   6  T cells / B-T doublets    : CD3D/CD3E/CD8A/CD8B/IL7R/GNLY/NKG7 (RNA);
+#                                  CD3/CD8/TCR-AB/CD5/CD2 (ADT); lowest MS4A1.
+#   7  Platelet doublets         : PPBP/PF4/ITGA2B (RNA); CD41(ITGA2B)/CD62P(SELP)/
+#                                  CD36 (ADT); had 0 significant RNA markers.
+#   9  Monocyte/myeloid doublets : CD14/LYZ/S100A8/FCN1/CST3 (RNA);
+#                                  CD33/CD11b(ITGAM)/CD64(FCGR1A) (ADT).
+drop.subclusters <- c("6","7","9")
+keep.subclusters <- setdiff(levels(factor(OPIS_BCELL$Subcluster_ID)), drop.subclusters)
+
+OPIS_BCELL <- subset(OPIS_BCELL, subset = Subcluster_ID %in% keep.subclusters)
+OPIS_BCELL$Subcluster_ID <- droplevels(factor(OPIS_BCELL$Subcluster_ID))
+Idents(OPIS_BCELL) <- "Subcluster_ID"
+message("After cleaning: ", ncol(OPIS_BCELL), " cells across subclusters ",
+        paste(levels(OPIS_BCELL$Subcluster_ID), collapse = ", "))
+
+# ---- 2. Manual annotation map (RNA + ADT evidence + reasoning) ---------------
+#
+#  0  "Naive B (IEG-high)"
+#       Naive surface phenotype (IGHD+, CD23/FCER2+, CD27-, ADT CD1D+) overlaid
+#       with a strong immediate-early / heat-shock program (FOS, FOSB, DUSP1,
+#       DNAJB1, HSP90AA1). Reads as naive B carrying an activation / dissociation-
+#       stress signature rather than a separate lineage.
+#       [VERIFY: is it donor- or batch-restricted? if so it's technical.]
+#
+#  1  "Naive B (resting)"
+#       Textbook resting naive: IGHD = max, FCER2/CD23 = max, SELL+, CD27-,
+#       TCL1A+, no activation program. The core naive population.
+#
+#  2  "Memory B"
+#       CD27 = max with TNFRSF13B (TACI), CD80, CD70, FAS; ADT CD27 hi, CD24 hi.
+#       Classic CD27+ (switched/activated) memory phenotype.
+#
+#  3  "Intermediate B (HLA-G+)"
+#       Intermediate CD27, FCRL4 hi, distinctive HLA-G / HLA-DQA2 program, very
+#       high surface BAFF-R (TNFRSF13C, ADT). Unswitched/intermediate B with a
+#       possible regulatory lean.
+#       [VERIFY: IL10 / CD5 to assess a Breg interpretation.]
+#
+#  4  "Transitional B"
+#       TCL1A = max, MZB1 = max, PAX5 = max, IGHD+; ADT CD24 / CD38 elevated.
+#       TCL1A^hi MZB1^hi CD24^hi CD38^hi = canonical transitional signature.
+#
+#  5  "Atypical B (ABC/DN2)"
+#       T-bet (TBX21), CD11c (ITGAX), FCRL5, ZEB2, FGR, TOX2 all = max; ADT
+#       CD11c / CD86 / CD22 hi. Unambiguous age-associated / atypical B (DN2).
+#
+#  8  "Transitional/Naive (T2-like)"
+#       TCL1A+, IGHD+, PAX5+, ROR1+; ADT CD38 hi, CD21(CR2) hi, IGHD hi. Sits
+#       between transitional and naive -- a later (T2/T3) transitional or
+#       early-naive stage.
+#       [VERIFY: CD24/CD38 co-level vs cluster 4 to place it on the T1->naive axis.]
+
+annotation.map <- c(
+  "0" = "Naive B (IEG-high)",
+  "1" = "Naive B (resting)",
+  "2" = "Memory B",
+  "3" = "Intermediate B (HLA-G+)",
+  "4" = "Transitional B",
+  "5" = "Atypical B (ABC/DN2)",
+  "8" = "Transitional/Naive (T2-like)"
+)
+
+OPIS_BCELL$Bcell_Annotation <- unname(annotation.map[as.character(OPIS_BCELL$Subcluster_ID)])
+
+# Order labels along a rough developmental axis for tidy plots / legends
+annotation.levels <- c(
+  "Transitional B",
+  "Transitional/Naive (T2-like)",
+  "Naive B (resting)",
+  "Naive B (IEG-high)",
+  "Intermediate B (HLA-G+)",
+  "Memory B",
+  "Atypical B (ABC/DN2)"
+)
+OPIS_BCELL$Bcell_Annotation <- factor(OPIS_BCELL$Bcell_Annotation, levels = annotation.levels)
+Idents(OPIS_BCELL) <- "Bcell_Annotation"
+
+# sanity check: every subcluster maps to exactly one label
+print(table(OPIS_BCELL$Subcluster_ID, OPIS_BCELL$Bcell_Annotation))
+
+# ---- 3. Re-plot on the EXISTING embedding (no re-clustering) ------------------
+umap.annot <- DimPlot2(OPIS_BCELL, reduction = "wnn.umap",
+                       group.by = "Bcell_Annotation", label = TRUE,
+                       repel = TRUE, box = TRUE, label.size = 5) +
+  ggtitle("B-cell | Annotated (doublets removed)")
+
+ggsave(file.path(bcell.save.path, "plots/UMAP", "Bcell_Annotated_UMAP.png"),
+       plot = umap.annot, dpi = 500, width = 11, height = 8, bg = "white")
+
+# ---- 4. Save annotated object (new file; leaves PreAnnotation intact) --------
+qs_save(OPIS_BCELL, file = file.path(load.path, "OPIS_BCELL_Annotated.qs2"))
+message("Annotated B-cell object saved: ", file.path(load.path, "OPIS_BCELL_Annotated.qs2"))

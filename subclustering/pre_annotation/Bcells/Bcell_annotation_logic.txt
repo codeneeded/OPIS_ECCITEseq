@@ -1,0 +1,147 @@
+===============================================================================
+OPIS ECCITEseq - B-CELL SUBCLUSTER ANNOTATION LOGIC
+===============================================================================
+Object        : OPIS_BCELL (subclustered B compartment)
+Parent input  : Cluster_ID 3 (B Naive), 12 (Transitional B), 21 (B intermediate)
+Subclustering : WNN (RNA + DSB-normalized ADT), HVGs recomputed on subset,
+                RNA dims 1:15, ADT dims 1:10, Leiden resolution 0.3
+Evidence used : Bcell_markers_RNA.csv, Bcell_markers_ADT.csv (FindAllMarkers),
+                AvgExpr_RNA(_scaled), AvgExpr_ADT(_scaled), PctExpr_RNA/ADT
+Note          : ADT is DSB-normalized (isotype-corrected), so per-cluster means
+                were computed as a plain arithmetic rowMeans on the data slot
+                (NO expm1 back-transformation, which only applies to log1p RNA).
+
+Conventions in this file:
+  "= max" means that subcluster has the highest scaled (0-1) value for the marker
+  across all subclusters. ADT names in parentheses are the corresponding protein.
+
+
+-------------------------------------------------------------------------------
+STEP 1 - CLEANING: subclusters removed as contamination / doublets
+-------------------------------------------------------------------------------
+These were dropped with subset() (no re-clustering). They are not B-cell states;
+they are doublets / ambient contamination and were a major source of the apparent
+over-fragmentation.
+
+Subcluster 6  -> T cells / B-T doublets   [REMOVED]
+  RNA : CD3D, CD3E, CD8A, CD8B, IL7R, GNLY, NKG7, KLRD1, GZMB all = max
+  ADT : CD3D, CD8A, TCR-AB, CD5, CD2, CD7 high
+  Note: lowest MS4A1 of any subcluster; carries proliferation (MKI67) too.
+  Call: clear T-lineage signal in a B subset = doublets / contaminating T cells.
+
+Subcluster 7  -> Platelet doublets        [REMOVED]
+  RNA : PPBP, PF4, ITGA2B = max
+  ADT : CD41 (ITGA2B), CD62P (SELP), CD36, PECAM1 high
+  Note: produced 0 significant RNA markers of its own (only platelet/ambient
+        genes), consistent with low-complexity platelet doublets.
+  Call: platelet signature, not a B state.
+
+Subcluster 9  -> Monocyte / myeloid doublets [REMOVED]
+  RNA : CD14, LYZ, S100A8, FCN1, CST3 = max
+  ADT : CD33, CD11b (ITGAM), CD64 (FCGR1A), CLEC12A high
+  Call: classical-monocyte signature = B-monocyte doublets / contamination.
+
+
+-------------------------------------------------------------------------------
+STEP 2 - ANNOTATION: retained subclusters and the reasoning for each
+-------------------------------------------------------------------------------
+
+Subcluster 0  -> "Naive B (IEG-high)"          [confidence: MEDIUM]
+  Naive identity:
+    IGHD+, FCER2/CD23+ (= 0.82 scaled), CD27- (= 0.00), ADT CD1D high.
+  Distinguishing program:
+    Strong immediate-early + heat-shock signature -- FOS, FOSB, GADD45B, DUSP1,
+    DNAJB1, DNAJA1, HSPH1, HSP90AA1, PER1.
+  Interpretation:
+    Naive B carrying an activation / dissociation-stress program rather than a
+    distinct lineage. The IEG/HSP genes are classic ex-vivo handling artifacts.
+  VERIFY:
+    Check whether this cluster is restricted to particular donors or a batch.
+    If yes -> treat as technical (consider merging into resting naive). If it is
+    spread evenly, it may reflect genuine recent in-vivo activation.
+
+Subcluster 1  -> "Naive B (resting)"           [confidence: HIGH]
+  Evidence:
+    IGHD = max, FCER2/CD23 = max, SELL+ (also a top marker), CD27- (= 0.00),
+    TCL1A+. DSP, IGFBP4 among top markers. No activation/stress program.
+  Interpretation:
+    Textbook resting naive B -- the core naive population of the compartment.
+
+Subcluster 2  -> "Memory B"                     [confidence: HIGH]
+  Evidence:
+    CD27 = max, TNFRSF13B (TACI) = max, CD80 = max, plus CD70, FAS, TEX9, TFEC,
+    S100A4. ADT: CD27 high, CD24 high; also CD82 (top ADT marker).
+  Interpretation:
+    CD27+ TACI+ CD80+ = activated / switched memory B cells. FCRL4 is also high
+    here, sometimes seen in tissue-like / atypical memory, but in PBMC the CD27+
+    program dominates -> memory B.
+
+Subcluster 3  -> "Intermediate B (HLA-G+)"      [confidence: MEDIUM]
+  Evidence:
+    Intermediate CD27 (= 0.59), FCRL4 high (= 0.92). Distinctive HLA-G and
+    HLA-DQA2 program (HLA-G = top RNA marker). ADT: BAFF-R (TNFRSF13C) very high
+    (top ADT marker by a wide margin), with BTLA, CXCR3, IGHM, CD79B.
+  Interpretation:
+    Unswitched / intermediate B (between naive and memory). The HLA-G+ phenotype
+    has been described for a regulatory-leaning B subset.
+  VERIFY:
+    Look at IL10 and CD5 to test whether a Breg (regulatory B) label is warranted
+    rather than generic intermediate/unswitched.
+
+Subcluster 4  -> "Transitional B"               [confidence: HIGH]
+  Evidence:
+    TCL1A = max, MZB1 = max, PAX5 = max, IGHD+; FCRL1 a top marker; ADT CD24 and
+    CD38 elevated.
+  Interpretation:
+    TCL1A-hi MZB1-hi CD24-hi CD38-hi is the canonical transitional B signature.
+    This is the transitional core (consistent with parent Cluster_ID 12).
+
+Subcluster 5  -> "Atypical B (ABC / DN2)"       [confidence: HIGH]
+  Evidence:
+    TBX21 (T-bet) = max, ITGAX (CD11c) = max, FCRL5 = max, ZEB2 = max, FGR = max,
+    TOX2, CD86, NKG7, IGHG2 (class-switched). ADT: CD11c (ITGAX), CD86, CD22 high.
+    Largest set of significant markers (~900) -> transcriptionally very distinct.
+  Interpretation:
+    Unambiguous age-associated / atypical B cell (ABC, "DN2"). T-bet+ CD11c+
+    FCRL5+ ZEB2+ is the defining combination. Of biological interest in
+    HIV/chronic-stimulation settings.
+
+Subcluster 8  -> "Transitional/Naive (T2-like)" [confidence: MEDIUM]
+  Evidence:
+    TCL1A+ (= 0.76), IGHD+, PAX5+, ROR1+ (ROR1 a top marker), HLA-DRB5, IL3RA.
+    ADT: CD38 high (= max), CD21/CR2 high (= max), IGHD high (= max).
+  Interpretation:
+    Sits between transitional and naive -- a later (T2/T3) transitional or
+    early-naive stage. CR2(CD21)-hi with retained CD38 is consistent with a
+    maturing transitional cell approaching the naive pool.
+  VERIFY:
+    Compare CD24/CD38 co-levels against subcluster 4 to position it on the
+    T1 -> T2 -> naive axis; if indistinguishable from 4, consider merging.
+
+
+-------------------------------------------------------------------------------
+STEP 3 - FINAL LABEL ORDER (developmental, used for plotting)
+-------------------------------------------------------------------------------
+  1. Transitional B                  (subcluster 4)
+  2. Transitional/Naive (T2-like)    (subcluster 8)
+  3. Naive B (resting)               (subcluster 1)
+  4. Naive B (IEG-high)              (subcluster 0)
+  5. Intermediate B (HLA-G+)         (subcluster 3)
+  6. Memory B                        (subcluster 2)
+  7. Atypical B (ABC/DN2)            (subcluster 5)
+
+
+-------------------------------------------------------------------------------
+OPEN ITEMS BEFORE FINALIZING
+-------------------------------------------------------------------------------
+- Subcluster 0: confirm IEG/HSP signature is biological vs handling stress
+  (donor/batch distribution).
+- Subcluster 3: test Breg interpretation (IL10, CD5).
+- Subcluster 8: confirm it is distinct from subcluster 4 (transitional) on
+  CD24/CD38; merge if not.
+- Consider a formal doublet call (DoubletFinder / scrublet) on the parent object
+  to back the removal of subclusters 6/7/9 for publication.
+
+These annotations are proposed from marker evidence and should be confirmed
+against UMAP marker overlays before being treated as final.
+===============================================================================

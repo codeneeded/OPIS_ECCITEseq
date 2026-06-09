@@ -1,0 +1,8 @@
+"","Transitional B","Transitional/Naive (T2-like)","Naive B (resting)","Naive B (IEG-high)","Intermediate B (HLA-G+)","Memory B","Atypical B (ABC/DN2)"
+"Transitional B",1,0.2653,0.467,0.265,0.0016,-0.0426,-0.5239
+"Transitional/Naive (T2-like)",0.2653,1,0.4482,0.4376,0.1525,-0.1058,-0.4522
+"Naive B (resting)",0.467,0.4482,1,0.3718,0.3327,-0.1022,-0.389
+"Naive B (IEG-high)",0.265,0.4376,0.3718,1,-0.163,0.0075,-0.4716
+"Intermediate B (HLA-G+)",0.0016,0.1525,0.3327,-0.163,1,0.0991,-0.0978
+"Memory B",-0.0426,-0.1058,-0.1022,0.0075,0.0991,1,-0.1589
+"Atypical B (ABC/DN2)",-0.5239,-0.4522,-0.389,-0.4716,-0.0978,-0.1589,1

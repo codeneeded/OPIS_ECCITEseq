@@ -1,0 +1,71 @@
+"modality","category","requested","resolved_to","found"
+"ADT","Lineage","CD19","CD19",TRUE
+"ADT","Lineage","CD20","MS4A1",TRUE
+"ADT","Lineage","CD22","CD22",TRUE
+"ADT","Lineage","CD79B","CD79B",TRUE
+"ADT","Lineage","HLA-DR","HLA-DRA",TRUE
+"ADT","Naive/Memory","IgD","IGHD",TRUE
+"ADT","Naive/Memory","IgM","IGHM",TRUE
+"ADT","Naive/Memory","CD27","CD27",TRUE
+"ADT","Naive/Memory","CD38","CD38",TRUE
+"ADT","Naive/Memory","CD24","CD24",TRUE
+"ADT","Naive/Memory","CD86","CD86",TRUE
+"ADT","Atypical","CXCR5","CXCR5",TRUE
+"ADT","Atypical","LILRB1","LILRB1",TRUE
+"ADT","Activation","CD40","CD40",TRUE
+"ADT","Activation","CD69","CD69",TRUE
+"RNA","Lineage","MS4A1","MS4A1",TRUE
+"RNA","Lineage","CD79A","CD79A",TRUE
+"RNA","Lineage","CD79B","CD79B",TRUE
+"RNA","Lineage","CD74","CD74",TRUE
+"RNA","Lineage","BANK1","BANK1",TRUE
+"RNA","Lineage","CD19","CD19",TRUE
+"RNA","Lineage","BLK","BLK",TRUE
+"RNA","Naive B (resting)","IGHD","IGHD",TRUE
+"RNA","Naive B (resting)","IGHM","IGHM",TRUE
+"RNA","Naive B (resting)","TCL1A","TCL1A",TRUE
+"RNA","Naive B (resting)","IL4R","IL4R",TRUE
+"RNA","Naive B (resting)","FCER2","FCER2",TRUE
+"RNA","Naive B (resting)","CCR7","CCR7",TRUE
+"RNA","Naive B (resting)","CXCR4","CXCR4",TRUE
+"RNA","Naive B (resting)","BACH2","BACH2",TRUE
+"RNA","Transitional B","CD38","CD38",TRUE
+"RNA","Transitional B","CD10","MME",TRUE
+"RNA","Transitional B","SOX4","SOX4",TRUE
+"RNA","Transitional B","VPREB3","VPREB3",TRUE
+"RNA","Transitional B","IGLL5","IGLL5",TRUE
+"RNA","Transitional B","TCL1A","TCL1A",TRUE
+"RNA","Transitional B","CD24","CD24",TRUE
+"RNA","Transitional B","IL7R","IL7R",TRUE
+"RNA","Transitional B","CD21","CR2",TRUE
+"RNA","IEG-High","FOS","FOS",TRUE
+"RNA","IEG-High","JUN","JUN",TRUE
+"RNA","IEG-High","JUNB","JUNB",TRUE
+"RNA","IEG-High","DUSP1","DUSP1",TRUE
+"RNA","IEG-High","EGR1","EGR1",TRUE
+"RNA","IEG-High","IER2","IER2",TRUE
+"RNA","IEG-High","NR4A1","NR4A1",TRUE
+"RNA","Intermediate HLA-G+","HLA-G","HLA-G",TRUE
+"RNA","Intermediate HLA-G+","HLA-DRA","HLA-DRA",TRUE
+"RNA","Intermediate HLA-G+","HLA-DPA1","HLA-DPA1",TRUE
+"RNA","Intermediate HLA-G+","HLA-DPB1","HLA-DPB1",TRUE
+"RNA","Intermediate HLA-G+","HLA-DRB1","HLA-DRB1",TRUE
+"RNA","Intermediate HLA-G+","AIM2","AIM2",TRUE
+"RNA","Atypical B","TBX21","TBX21",TRUE
+"RNA","Atypical B","ITGAX","ITGAX",TRUE
+"RNA","Atypical B","FCRL5","FCRL5",TRUE
+"RNA","Atypical B","FCRL3","FCRL3",TRUE
+"RNA","Atypical B","ZEB2","ZEB2",TRUE
+"RNA","Atypical B","LILRB1","LILRB1",TRUE
+"RNA","Atypical B","LILRB2","LILRB2",TRUE
+"RNA","Atypical B","CXCR3","CXCR3",TRUE
+"RNA","Memory B","CD27","CD27",TRUE
+"RNA","Memory B","COCH","COCH",TRUE
+"RNA","Memory B","LTB","LTB",TRUE
+"RNA","Memory B","CD40","CD40",TRUE
+"RNA","Memory B","CD83","CD83",TRUE
+"RNA","Memory B","TNFRSF13B","TNFRSF13B",TRUE
+"RNA","Plasmablast exclusion","JCHAIN","JCHAIN",TRUE
+"RNA","Plasmablast exclusion","XBP1","XBP1",TRUE
+"RNA","Plasmablast exclusion","MZB1","MZB1",TRUE
+"RNA","Plasmablast exclusion","PRDM1","PRDM1",TRUE

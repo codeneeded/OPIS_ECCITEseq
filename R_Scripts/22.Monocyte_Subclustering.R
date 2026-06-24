@@ -250,6 +250,72 @@ worksheet <- lapply(clusters, function(cl) {
 write.csv(worksheet, file.path(ann.dir, "suggested_names.csv"), row.names = FALSE)
 print(worksheet[, c("cluster","top_signature","suggested_name")])
 
+# ============================ 5b. Proposed annotation + labeled UMAPs =========
+# Apply the res-0.4 annotation worked out from the marker/ADT/signature review
+# (see Monocyte_annotation_README). Cluster IDs are res-0.4-specific, so this
+# block only applies when those exact clusters are present.
+umap.pt.size <- 1.6        # <-- bump up for bigger points
+
+mono.fine <- c(
+  "0" = "Classical monocyte (HSP/stress)",
+  "1" = "Classical monocyte (VCAN+/platelet-assoc)",
+  "2" = "Inflammatory monocyte",
+  "3" = "Classical monocyte (hypoxic/glycolytic)",
+  "4" = "MHC-II-high antigen-presenting monocyte",
+  "5" = "CD16+ monocyte (ISG-high)",
+  "6" = "Classical monocyte (CCR2/IRF8-high) [REVIEW]",
+  "7" = "HLA-G+ monocyte",
+  "8" = "Non-classical monocyte (CD16++)",
+  "9" = "EXCLUDE - T-cell doublet/contamination"
+)
+mono.group <- c(
+  "0" = "Classical monocyte", "1" = "Classical monocyte", "3" = "Classical monocyte",
+  "2" = "Inflammatory monocyte",
+  "4" = "Antigen-presenting monocyte",
+  "7" = "HLA-G+ monocyte",
+  "5" = "Non-classical/CD16+ monocyte", "8" = "Non-classical/CD16+ monocyte",
+  "6" = "REVIEW", "9" = "EXCLUDE"
+)
+fine.levels  <- c("Classical monocyte (HSP/stress)",
+                  "Classical monocyte (VCAN+/platelet-assoc)",
+                  "Classical monocyte (hypoxic/glycolytic)",
+                  "Inflammatory monocyte", "MHC-II-high antigen-presenting monocyte",
+                  "HLA-G+ monocyte", "CD16+ monocyte (ISG-high)",
+                  "Non-classical monocyte (CD16++)",
+                  "Classical monocyte (CCR2/IRF8-high) [REVIEW]",
+                  "EXCLUDE - T-cell doublet/contamination")
+group.levels <- c("Classical monocyte", "Inflammatory monocyte",
+                  "Antigen-presenting monocyte", "HLA-G+ monocyte",
+                  "Non-classical/CD16+ monocyte", "REVIEW", "EXCLUDE")
+
+if (all(clusters %in% names(mono.fine))) {
+  message("\n=== proposed annotation UMAPs ===")
+  OPIS_MONO$Mono_fine  <- factor(unname(mono.fine [as.character(OPIS_MONO$Subcluster_ID)]),
+                                 levels = intersect(fine.levels,  unname(mono.fine)))
+  OPIS_MONO$Mono_group <- factor(unname(mono.group[as.character(OPIS_MONO$Subcluster_ID)]),
+                                 levels = intersect(group.levels, unname(mono.group)))
+  
+  # Fine labels: too long to print on-plot -> legend only, bigger points
+  ggsave(file.path(out.base, sprintf("UMAP_annotation_fine_res%.1f.png", chosen_res)),
+         DimPlot2(OPIS_MONO, features = "Mono_fine", reduction = "wnn.umap",
+                  pt.size = umap.pt.size, label = FALSE, theme = theme_umap_arrows()) +
+           ggtitle(sprintf("Monocytes res %.1f — proposed annotation (fine)", chosen_res)),
+         width = 12, height = 8, dpi = 300, bg = "white")
+  
+  # Merged groups: labelled on-plot, bigger points
+  ggsave(file.path(out.base, sprintf("UMAP_annotation_group_res%.1f.png", chosen_res)),
+         DimPlot2(OPIS_MONO, features = "Mono_group", reduction = "wnn.umap",
+                  pt.size = umap.pt.size, label = TRUE, box = TRUE,
+                  theme = theme_umap_arrows()) +
+           ggtitle(sprintf("Monocytes res %.1f — proposed annotation (merged groups)", chosen_res)),
+         width = 11, height = 8, dpi = 300, bg = "white")
+  message("  saved annotated UMAPs (fine + merged groups).")
+} else {
+  message("\nSkipping proposed-annotation UMAPs: cluster IDs (",
+          paste(clusters, collapse = ", "), ") don't match the res-0.4 map. ",
+          "Edit mono.fine / mono.group for this resolution.")
+}
+
 # ============================ 6. Optional SingleR ============================
 if (RUN_SINGLER) {
   if (!requireNamespace("SingleR", quietly = TRUE) || !requireNamespace("celldex", quietly = TRUE)) {

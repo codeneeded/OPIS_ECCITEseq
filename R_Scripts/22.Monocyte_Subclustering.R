@@ -316,6 +316,140 @@ if (all(clusters %in% names(mono.fine))) {
           "Edit mono.fine / mono.group for this resolution.")
 }
 
+# ============================ 5c. GREEN marker heatmaps (annotation confirm) ==
+# CD8/B-cell manuscript style: grouped curated panels, green palette, row group
+# annotation + gaps, columns = clusters (top bar = proposed group). RNA averaged
+# on log1p "data"; ADT averaged DSB-safe (manual rowMeans, no expm1).
+message("\n=== green marker heatmaps ===")
+
+heatmap_colors_green <- colorRampPalette(
+  c("#F7FCF5", "#C7E9C0", "#74C476", "#31A354", "#006D2C"))(100)
+scale_01 <- function(m) {
+  m <- as.matrix(m)
+  out <- t(apply(m, 1, function(x) {
+    rng <- range(x, na.rm = TRUE)
+    if (!is.finite(diff(rng)) || diff(rng) == 0) return(rep(0, length(x)))
+    (x - rng[1]) / (rng[2] - rng[1])
+  })); dimnames(out) <- dimnames(m); out
+}
+get_gaps <- function(a) { g <- as.character(a$Category); which(g[-length(g)] != g[-1]) }
+cluster_within_groups <- function(mat, a) {
+  ro <- character(0)
+  for (grp in levels(droplevels(a$Category))) {
+    rows <- rownames(a)[a$Category == grp]
+    if (length(rows) <= 1) { ro <- c(ro, rows); next }
+    hc <- hclust(dist(mat[rows, , drop = FALSE]), method = "ward.D2"); ro <- c(ro, rows[hc$order])
+  }
+  ro
+}
+resolve_alias <- function(label, aliases, available) {
+  cand <- c(label, if (nzchar(aliases)) trimws(strsplit(aliases, ",")[[1]]) else character(0))
+  for (c0 in cand) if (c0 %in% available) return(c0)
+  avn <- .norm(available)
+  for (c0 in cand) { hit <- available[avn == .norm(c0)]; if (length(hit)) return(hit[1]) }
+  NA_character_
+}
+prep_panel <- function(tb, cat_levels, available) {
+  tb$feature <- mapply(resolve_alias, tb$label, tb$aliases, MoreArgs = list(available = available))
+  miss <- tb$label[is.na(tb$feature)]
+  if (length(miss)) message("  [panel] not found, skipped: ", paste(miss, collapse = ", "))
+  tb <- tb[!is.na(tb$feature), ]
+  tb$category <- factor(tb$category, levels = cat_levels)
+  tb <- tb[order(tb$category), ]
+  tb[!duplicated(tb$feature), ]
+}
+
+mono_cat_palette <- c(
+  "Lineage" = "#90A4AE", "Classical" = "#42A5F5", "Intermediate" = "#7E57C2",
+  "Non-classical" = "#AB47BC", "Inflammatory" = "#FF7043",
+  "IFN-ISG" = "#FFCA28", "Antigen-presenting" = "#EC407A")
+mono_group_palette <- c(
+  "Classical monocyte" = "#42A5F5", "Inflammatory monocyte" = "#FF7043",
+  "Antigen-presenting monocyte" = "#EC407A", "HLA-G+ monocyte" = "#AB47BC",
+  "Non-classical/CD16+ monocyte" = "#26A69A", "REVIEW" = "#BDBDBD", "EXCLUDE" = "#9E9E9E")
+
+rna_cat_levels <- c("Lineage","Classical","Intermediate","Non-classical",
+                    "Inflammatory","IFN-ISG","Antigen-presenting")
+rna_panel <- tibble::tribble(
+  ~category,            ~label,     ~aliases,
+  "Lineage","LYZ","",   "Lineage","S100A8","", "Lineage","S100A9","", "Lineage","LST1","",
+  "Lineage","CTSS","",  "Lineage","FCN1","",   "Lineage","TYROBP","","Lineage","FCER1G","",
+  "Classical","CD14","","Classical","VCAN","", "Classical","CCR2","","Classical","LRP1","",
+  "Classical","SELL","",
+  "Intermediate","FCGR3A","","Intermediate","MS4A7","","Intermediate","HLA-DRA","",
+  "Intermediate","HLA-DRB1","","Intermediate","CD74","",
+  "Non-classical","CX3CR1","","Non-classical","IFITM2","","Non-classical","LILRB1","",
+  "Non-classical","RHOC","","Non-classical","C1QA","","Non-classical","C1QB","",
+  "Inflammatory","IL1B","","Inflammatory","CXCL8","","Inflammatory","NLRP3","",
+  "Inflammatory","CCL3","","Inflammatory","CCL4","","Inflammatory","PTGS2","",
+  "Inflammatory","TNF","","Inflammatory","NFKBIA","",
+  "IFN-ISG","ISG15","","IFN-ISG","IFIT1","","IFN-ISG","IFIT2","","IFN-ISG","IFIT3","",
+  "IFN-ISG","IFI6","","IFN-ISG","MX1","","IFN-ISG","OAS1","","IFN-ISG","RSAD2","","IFN-ISG","IRF7","",
+  "Antigen-presenting","HLA-DPA1","","Antigen-presenting","HLA-DPB1","",
+  "Antigen-presenting","CIITA","","Antigen-presenting","CD86","")
+
+adt_panel <- tibble::tribble(
+  ~category,  ~label,    ~aliases,
+  "Lineage","CD14","",    "Lineage","CD16","FCGR3A", "Lineage","CD11b","ITGAM",
+  "Lineage","CD33","",    "Lineage","CD64","FCGR1A", "Lineage","HLA-DR","HLA-DRA,HLA.DRA,HLADR",
+  "Lineage","CX3CR1","",  "Lineage","CD11c","ITGAX", "Lineage","CD86","")
+
+# proposed-group column annotation (if section 5b ran)
+col_annot <- NULL; col_annot_colors <- NULL
+if ("Mono_group" %in% colnames(OPIS_MONO@meta.data)) {
+  cg <- sapply(clusters, function(cl) as.character(OPIS_MONO$Mono_group[OPIS_MONO$Subcluster_ID == cl])[1])
+  col_annot <- data.frame(Proposed = cg, row.names = clusters)
+  col_annot_colors <- list(Proposed = mono_group_palette[intersect(names(mono_group_palette), unique(cg))])
+}
+
+build_green_heatmap <- function(obj, assay_name, panel_df, clust_levels, title, out_png,
+                                cellwidth = 24, cellheight = 11) {
+  DefaultAssay(obj) <- assay_name
+  available <- rownames(obj[[assay_name]])
+  panel_df  <- panel_df[panel_df$feature %in% available, , drop = FALSE]
+  if (nrow(panel_df) < 2) { message("  <2 features for ", assay_name, " — skipped"); return(invisible()) }
+  grp <- droplevels(factor(obj$Subcluster_ID)); clust_levels <- clust_levels[clust_levels %in% levels(grp)]
+  if (assay_name == "ADT") {
+    dat <- GetAssayData(obj, assay = "ADT", slot = "data")[panel_df$feature, , drop = FALSE]
+    avg <- sapply(clust_levels, function(cl) rowMeans(dat[, which(grp == cl), drop = FALSE]))
+  } else {
+    avgL <- AverageExpression(obj, assays = assay_name, features = panel_df$feature,
+                              group.by = "Subcluster_ID", layer = "data")[[assay_name]]
+    colnames(avgL) <- sub("^g", "", colnames(avgL))
+    avg <- avgL[panel_df$feature, clust_levels, drop = FALSE]
+  }
+  rownames(avg) <- panel_df$label; colnames(avg) <- clust_levels
+  avg_scaled <- scale_01(avg)
+  annot_df <- data.frame(Category = factor(panel_df$category, levels = unique(panel_df$category)),
+                         row.names = panel_df$label)
+  ro <- cluster_within_groups(avg_scaled, annot_df)
+  avg_ord <- avg_scaled[ro, , drop = FALSE]; annot_ord <- annot_df[ro, , drop = FALSE]
+  gaps <- get_gaps(annot_ord)
+  clv <- levels(droplevels(annot_ord$Category)); cc <- mono_cat_palette[clv]; cc[is.na(cc)] <- "#BDBDBD"; names(cc) <- clv
+  ann_colors <- c(list(Category = cc), if (!is.null(col_annot_colors)) col_annot_colors)
+  cnts <- as.integer(table(grp)[clust_levels]); col_labels <- paste0(clust_levels, " (n=", cnts, ")")
+  ca <- NULL
+  if (!is.null(col_annot)) { ca <- col_annot[clust_levels, , drop = FALSE]; rownames(ca) <- col_labels }
+  colnames(avg_ord) <- col_labels
+  pheatmap(avg_ord, cluster_rows = FALSE, cluster_cols = FALSE, scale = "none",
+           color = heatmap_colors_green, border_color = "white",
+           annotation_row = annot_ord, annotation_col = ca, annotation_colors = ann_colors,
+           annotation_names_row = FALSE, gaps_row = gaps,
+           cellwidth = cellwidth, cellheight = cellheight, fontsize = 10,
+           fontsize_row = 8, fontsize_col = 9, angle_col = 45, main = title, filename = out_png)
+  message("  saved: ", out_png)
+}
+
+build_green_heatmap(OPIS_MONO, "RNA",
+                    prep_panel(rna_panel, rna_cat_levels, rownames(OPIS_MONO[["RNA"]])),
+                    clusters, sprintf("Monocytes res %.1f | RNA markers (green)", chosen_res),
+                    file.path(ann.dir, "marker_heatmap_RNA_GREEN.png"))
+build_green_heatmap(OPIS_MONO, "ADT",
+                    prep_panel(adt_panel, "Lineage", rownames(OPIS_MONO[["ADT"]])),
+                    clusters, sprintf("Monocytes res %.1f | ADT markers (green)", chosen_res),
+                    file.path(ann.dir, "marker_heatmap_ADT_GREEN.png"), cellheight = 16)
+DefaultAssay(OPIS_MONO) <- "RNA"
+
 # ============================ 6. Optional SingleR ============================
 if (RUN_SINGLER) {
   if (!requireNamespace("SingleR", quietly = TRUE) || !requireNamespace("celldex", quietly = TRUE)) {

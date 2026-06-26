@@ -20,6 +20,7 @@ RUN_IDENTITY_DGE <- TRUE     # RNA one-vs-rest population markers (MAST)
 RUN_IDENTITY_DPE <- TRUE     # ADT one-vs-rest population markers (wilcox)
 RUN_OUD_DGE      <- TRUE     # RNA OUD+ vs OUD- per population (MAST)
 RUN_OUD_DPE      <- TRUE     # ADT OUD+ vs OUD- per population (wilcox)
+RUN_ABUNDANCE    <- TRUE     # ClusterDistrBar cluster-distribution / abundance plots
 RUN_ENRICHR      <- TRUE     # EnrichR on the RNA DGE (needs internet + enrichR + openxlsx)
 
 # ---- Config ------------------------------------------------------------------
@@ -31,8 +32,8 @@ dpe_lfc        <- 0.25           # |avg_log2FC| significance cut, ADT (lower if 
 oud_min_cells  <- 20             # min cells per OUD group within a population to test
 
 suppressPackageStartupMessages({
-  library(Seurat); library(qs2); library(dplyr); library(tidyr); library(tibble)
-  library(ggplot2)
+  library(Seurat); library(SeuratExtend); library(qs2)
+  library(dplyr); library(tidyr); library(tibble); library(ggplot2)
 })
 
 # ---- Paths -------------------------------------------------------------------
@@ -42,7 +43,8 @@ dge.root  <- file.path(mono.base, "DGE_DPE")
 enr.root  <- file.path(mono.base, "Pathway_EnrichR")
 d_idg <- file.path(dge.root, "Identity_DGE_RNA"); d_idp <- file.path(dge.root, "Identity_DPE_ADT")
 d_oug <- file.path(dge.root, "OUD_DGE_RNA");      d_oup <- file.path(dge.root, "OUD_DPE_ADT")
-for (d in c(d_idg, d_idp, d_oug, d_oup)) dir.create(d, recursive = TRUE, showWarnings = FALSE)
+abund.dir <- file.path(mono.base, "abundance")
+for (d in c(d_idg, d_idp, d_oug, d_oup, abund.dir)) dir.create(d, recursive = TRUE, showWarnings = FALSE)
 
 # =============================================================================
 # 1. LOAD + APPLY ANNOTATION
@@ -94,6 +96,38 @@ pct <- as.data.frame.matrix(round(prop.table(table(OPIS_MONO[[group_var]][,1],
                                                    OPIS_MONO$OUD_status), margin = 2) * 100, 2))
 write.csv(pct %>% rownames_to_column("population"),
           file.path(dge.root, "population_x_OUD_percentWithinOUD.csv"), row.names = FALSE)
+
+# =============================================================================
+# 1b. ABUNDANCE / cluster distribution (SeuratExtend::ClusterDistrBar)
+# =============================================================================
+if (RUN_ABUNDANCE) {
+  message("\n=== abundance / cluster distribution ===")
+  cl  <- OPIS_MONO@meta.data[[group_var]]
+  sv  <- function(p, file, w = 10, h = 6)
+    ggsave(file.path(abund.dir, file), p, width = w, height = h, dpi = 300, bg = "white")
+  
+  # By donor (orig.ident): how each population is made up across donors
+  sv(ClusterDistrBar(origin = OPIS_MONO$orig.ident, cluster = cl) +
+       ggtitle("Population composition by donor (%)"),
+     "abundance_byDonor_percent.png", w = 11)
+  sv(ClusterDistrBar(origin = OPIS_MONO$orig.ident, cluster = cl, percent = FALSE) +
+       ggtitle("Population counts by donor"),
+     "abundance_byDonor_counts.png", w = 11)
+  
+  # By OUD status: is a population OUD-skewed?
+  sv(ClusterDistrBar(origin = OPIS_MONO$OUD_status, cluster = cl) +
+       ggtitle("OUD proportion within each population (%)"),
+     "abundance_byOUD_percent.png")
+  sv(ClusterDistrBar(origin = OPIS_MONO$OUD_status, cluster = cl, percent = FALSE) +
+       ggtitle("Counts by OUD within each population"),
+     "abundance_byOUD_counts.png")
+  
+  # Reverse: monocyte composition within each OUD group (compositional shift)
+  sv(ClusterDistrBar(origin = cl, cluster = OPIS_MONO$OUD_status) +
+       ggtitle("Monocyte composition within each OUD group (%)"),
+     "composition_withinOUD_percent.png", w = 8)
+  message("  abundance plots -> ", abund.dir)
+}
 
 # ---- shared significant-table writer ----------------------------------------
 write_sig <- function(full, key_col, lfc, dir, prefix) {
